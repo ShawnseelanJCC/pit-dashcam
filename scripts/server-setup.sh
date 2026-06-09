@@ -27,9 +27,11 @@ mkdir -p /tmp/hls
 chown www-data:www-data /tmp/hls
 chmod 755 /tmp/hls
 
-echo "[4/7] Deploying nginx.conf..."
+echo "[4/7] Deploying nginx.conf and dashboard..."
 cp "$SCRIPT_DIR/../server/nginx.conf" /etc/nginx/nginx.conf
 nginx -t
+mkdir -p /var/www/pitcam
+cp "$SCRIPT_DIR/../dashboard/index.html" /var/www/pitcam/index.html
 
 echo "[5/7] Configuring UFW firewall..."
 ufw allow 22/tcp    comment 'SSH'
@@ -48,11 +50,11 @@ SERVER_IP=$(hostname -I | awk '{print $1}')
 echo "============================================"
 echo "  JRT PitCam is ready"
 echo "============================================"
-echo "  Larix RTMP URL:  rtmp://$SERVER_IP/live/jrt"
-echo "  HLS stream URL:  http://$SERVER_IP:8080/live/jrt.m3u8"
-echo "  Health check:    http://$SERVER_IP:8080/"
+echo "  Pit wall dashboard: http://$SERVER_IP/"
+echo "  Larix RTMP URL:     rtmp://$SERVER_IP/live/jrt"
+echo "  HLS stream URL:     http://$SERVER_IP:8080/live/jrt.m3u8"
+echo "  Health check:       http://$SERVER_IP:8080/"
 echo "============================================"
 echo ""
-echo "  Open dashboard/index.html in your pit wall browser."
-echo "  Enter the HLS stream URL above and click CONNECT."
+echo "  Open http://$SERVER_IP/ on the pit wall browser."
 echo ""
