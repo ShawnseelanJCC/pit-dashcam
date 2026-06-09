@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JRT PitCam — #518</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #080808;
+    --surface: #111111;
+    --border:  #1e1e1e;
+    --red:     #e8001d;
+    --green:   #00e87a;
+    --amber:   #ffb800;
+    --blue:    #00aaff;
+    --dim:     #555;
+    --text:    #e0e0e0;
+    --label:   #888;
+    --display: 'Barlow Condensed', sans-serif;
+    --mono:    'Share Tech Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--display);
+    font-size: 14px;
+  }
+
+  body {
+    display: grid;
+    grid-template-rows: 48px 1fr 100px;
+    grid-template-areas: "topbar" "middle" "bottombar";
+  }
+
+  #topbar {
+    grid-area: topbar;
+    background: var(--surface);
+    border-bottom: 1px solid var(--red);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--red);
+    letter-spacing: 2px;
+    white-space: nowrap;
+    margin-right: 8px;
+  }
+  .logo span { color: var(--text); }
+
+  .top-divider { width: 1px; height: 28px; background: var(--border); }
+
+  .top-stat { display: flex; flex-direction: column; align-items: center; min-width: 70px; }
+  .top-stat .label { font-family: var(--mono); font-size: 9px; color: var(--label); letter-spacing: 1px; text-transform: uppercase; }
+  .top-stat .value { font-family: var(--mono); font-size: 17px; color: var(--text); line-height: 1; }
+  .top-stat .value.big { font-size: 20px; color: var(--green); }
+
+  .flag-btns { display: flex; gap: 5px; margin-left: auto; }
+  .flag-btn {
+    font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--dim);
+    background: transparent; color: var(--dim); cursor: pointer; transition: all .15s;
+  }
+  .flag-btn.green  { border-color: var(--green); color: var(--green); }
+  .flag-btn.yellow { border-color: var(--amber); color: var(--amber); }
+  .flag-btn.sc     { border-color: var(--blue);  color: var(--blue);  }
+  .flag-btn.red-f  { border-color: var(--red);   color: var(--red);   }
+  .flag-btn.active.green  { background: var(--green);  color: #000; }
+  .flag-btn.active.yellow { background: var(--amber);  color: #000; }
+  .flag-btn.active.sc     { background: var(--blue);   color: #000; }
+  .flag-btn.active.red-f  { background: var(--red);    color: #fff; }
+
+  #middle { grid-area: middle; display: flex; overflow: hidden; }
+
+  #video-panel {
+    flex: 3; position: relative; background: #000;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+
+  #stream-video { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+  #no-stream {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; background: #000; z-index: 2;
+  }
+  #no-stream .ns-text { font-family: var(--mono); font-size: 28px; color: var(--dim); letter-spacing: 4px; }
+  #no-stream .ns-sub  { font-family: var(--mono); font-size: 11px; color: #333; margin-top: 8px; letter-spacing: 2px; }
+
+  .hud { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+  .hud-corner { position: absolute; width: 22px; height: 22px; }
+  .hud-tl { top: 10px;    left: 10px;  border-top:    2px solid var(--red); border-left:   2px solid var(--red); }
+  .hud-tr { top: 10px;    right: 10px; border-top:    2px solid var(--red); border-right:  2px solid var(--red); }
+  .hud-bl { bottom: 10px; left: 10px;  border-bottom: 2px solid var(--red); border-left:   2px solid var(--red); }
+  .hud-br { bottom: 10px; right: 10px; border-bottom: 2px solid var(--red); border-right:  2px solid var(--red); }
+
+  #live-dot {
+    position: absolute; top: 12px; right: 14px;
+    display: none; align-items: center; gap: 5px; z-index: 4;
+  }
+  #live-dot .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--red); animation: pulse 1.5s infinite;
+  }
+  #live-dot .live-label { font-family: var(--mono); font-size: 10px; color: var(--red); letter-spacing: 2px; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+  #sidebar {
+    width: 280px; min-width: 260px; background: var(--surface);
+    border-left: 1px solid var(--border); display: flex;
+    flex-direction: column; overflow-y: auto; overflow-x: hidden;
+  }
+
+  .sb-section { border-bottom: 1px solid var(--border); padding: 10px 12px; }
+  .sb-title { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--label); text-transform: uppercase; margin-bottom: 8px; }
+
+  #url-input {
+    width: 100%; background: #0d0d0d; border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 11px;
+    padding: 6px 8px; border-radius: 2px; margin-bottom: 6px;
+  }
+  #url-input:focus { outline: none; border-color: var(--red); }
+
+  .btn-row { display: flex; gap: 6px; }
+  .btn {
+    flex: 1; font-family: var(--display); font-weight: 700; font-size: 12px;
+    letter-spacing: 1px; padding: 6px 8px; border-radius: 2px;
+    border: 1.5px solid var(--border); background: transparent;
+    color: var(--label); cursor: pointer; transition: all .15s;
+  }
+  .btn:hover { border-color: var(--text); color: var(--text); }
+  .btn.primary { border-color: var(--green); color: var(--green); }
+  .btn.primary:hover { background: var(--green); color: #000; }
+  .btn.danger  { border-color: var(--red);   color: var(--red);   }
+  .btn.danger:hover  { background: var(--red);   color: #fff; }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+  .stat-item .stat-label { font-family: var(--mono); font-size: 9px; color: var(--label); text-transform: uppercase; }
+  .stat-item .stat-val   { font-family: var(--mono); font-size: 13px; color: var(--text); }
+  #conn-status { font-family: var(--mono); font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+  #conn-status.connected { color: var(--green); }
+
+  #lap-log-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  #lap-log-table th { color: var(--label); font-size: 9px; letter-spacing: 1px; text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
+  #lap-log-table td { padding: 3px 4px; border-bottom: 1px solid #151515; color: var(--text); }
+  #lap-log-table tr:first-child td { color: var(--green); }
+  .delta-pos { color: var(--red); }
+  .delta-neg { color: var(--green); }
+
+  #bottombar {
+    grid-area: bottombar; background: var(--surface);
+    border-top: 1px solid var(--border); display: flex;
+    align-items: stretch; overflow: hidden;
+  }
+
+  .bb-section {
+    padding: 8px 12px; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  }
+  .bb-label { font-family: var(--mono); font-size: 9px; color: var(--label); letter-spacing: 1px; text-transform: uppercase; }
+  .bb-value { font-family: var(--mono); font-size: 14px; color: var(--text); }
+
+  #signal-section { min-width: 80px; }
+  .signal-bars { display: flex; align-items: flex-end; gap: 3px; height: 24px; margin-top: 2px; }
+  .bar { width: 7px; background: var(--border); border-radius: 1px; }
+  .bar.active { background: var(--green); }
+  .bar:nth-child(1) { height: 5px; }  .bar:nth-child(2) { height: 9px; }
+  .bar:nth-child(3) { height: 14px; } .bar:nth-child(4) { height: 19px; }
+  .bar:nth-child(5) { height: 24px; }
+
+  #stint-section { min-width: 140px; }
+  #driver-name { font-family: var(--display); font-weight: 700; font-size: 16px; color: var(--blue); cursor: pointer; letter-spacing: 1px; }
+  #driver-name:hover { color: var(--text); }
+
+  #fuel-section { min-width: 160px; }
+  .fuel-bar-wrap { height: 8px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 4px 0; }
+  #fuel-bar { height: 100%; width: 100%; background: var(--green); transition: width .4s, background .4s; border-radius: 2px; }
+  .fuel-controls { display: flex; gap: 4px; align-items: center; }
+  .fuel-val { font-family: var(--mono); font-size: 18px; color: var(--text); min-width: 44px; }
+  .fuel-val.critical { color: var(--red); animation: pulse 1s infinite; }
+  .fuel-btn { font-family: var(--mono); font-size: 13px; padding: 2px 6px; border: 1px solid var(--border); background: transparent; color: var(--label); cursor: pointer; border-radius: 2px; }
+  .fuel-btn:hover { border-color: var(--text); color: var(--text); }
+  #refuel-btn { font-family: var(--display); font-weight: 700; font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border: 1px solid var(--green); background: transparent; color: var(--green); cursor: pointer; border-radius: 2px; }
+  #refuel-btn:hover { background: var(--green); color: #000; }
+
+  #lap-section { min-width: 90px; align-items: center; }
+  #lap-btn { font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 1px; padding: 8px 12px; border: 1.5px solid var(--amber); background: transparent; color: var(--amber); cursor: pointer; border-radius: 2px; width: 100%; }
+  #lap-btn:hover { background: var(--amber); color: #000; }
+  #lap-btn:active { transform: scale(0.97); }
+
+  #notes-section { flex: 1; }
+  #pit-notes { width: 100%; height: 72px; background: #0d0d0d; border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 7px; resize: none; border-radius: 2px; }
+  #pit-notes:focus { outline: none; border-color: var(--blue); }
+
+  #log-section { min-width: 220px; max-width: 300px; }
+  #event-log { height: 72px; overflow-y: auto; font-family: var(--mono); font-size: 10px; line-height: 1.5; }
+  #event-log .log-entry { display: flex; gap: 6px; }
+  #event-log .log-time { color: #444; white-space: nowrap; }
+  #event-log .log-msg  { color: var(--text); }
+  #event-log .log-entry.highlight .log-msg { color: var(--green); }
+  #event-log .log-entry.warn .log-msg { color: var(--red); }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">JRT <span>#518</span></div>
+  <div class="top-divider"></div>
+  <div class="top-stat">
+    <span class="label">Race Time</span>
+    <span class="value big" id="race-timer">00:00:00</span>
+  </div>
+  <div class="top-divider"></div>
+  <div class="top-stat">
+    <span class="label">Laps</span>
+    <span class="value" id="lap-count">0</span>
+  </div>
+  <div class="top-divider"></div>
+  <div class="top-stat">
+    <span class="label">Last Lap</span>
+    <span class="value" id="last-lap">--:--</span>
+  </div>
+  <div class="top-divider"></div>
+  <div class="top-stat">
+    <span class="label">Best Lap</span>
+    <span class="value" id="best-lap">--:--</span>
+  </div>
+  <div class="flag-btns">
+    <button class="flag-btn green  active" data-flag="GREEN"  onclick="setFlag(this)">GREEN</button>
+    <button class="flag-btn yellow"        data-flag="YELLOW" onclick="setFlag(this)">YELLOW</button>
+    <button class="flag-btn sc"            data-flag="SC"     onclick="setFlag(this)">SC</button>
+    <button class="flag-btn red-f"         data-flag="RED"    onclick="setFlag(this)">RED</button>
+  </div>
+</div>
+
+<div id="middle">
+  <div id="video-panel">
+    <video id="stream-video" autoplay muted playsinline></video>
+    <div id="no-stream">
+      <div class="ns-text">NO STREAM</div>
+      <div class="ns-sub">WAITING FOR FEED</div>
+    </div>
+    <div class="hud">
+      <div class="hud-corner hud-tl"></div>
+      <div class="hud-corner hud-tr"></div>
+      <div class="hud-corner hud-bl"></div>
+      <div class="hud-corner hud-br"></div>
+    </div>
+    <div id="live-dot">
+      <div class="dot"></div>
+      <span class="live-label">LIVE</span>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="sb-section">
+      <div class="sb-title">Stream Source</div>
+      <input id="url-input" type="text" placeholder="http://SERVER_IP:8080/live/jrt.m3u8" spellcheck="false">
+      <div class="btn-row">
+        <button class="btn primary" onclick="connectStream()">CONNECT</button>
+        <button class="btn danger"  onclick="disconnectStream()">DISCONNECT</button>
+      </div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-title">Stream Info</div>
+      <div id="conn-status">OFFLINE</div>
+      <div class="stat-grid">
+        <div class="stat-item"><div class="stat-label">Bitrate</div><div class="stat-val" id="stat-bitrate">—</div></div>
+        <div class="stat-item"><div class="stat-label">Buffer</div><div class="stat-val" id="stat-buffer">—</div></div>
+        <div class="stat-item"><div class="stat-label">Resolution</div><div class="stat-val" id="stat-res">—</div></div>
+        <div class="stat-item"><div class="stat-label">Latency</div><div class="stat-val" id="stat-latency">—</div></div>
+      </div>
+    </div>
+    <div class="sb-section" style="flex:1; overflow-y:auto;">
+      <div class="sb-title">Lap Log</div>
+      <table id="lap-log-table">
+        <thead><tr><th>LAP</th><th>TIME</th><th>DURATION</th><th>DELTA</th></tr></thead>
+        <tbody id="lap-log-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="bottombar">
+  <div class="bb-section" id="signal-section">
+    <div class="bb-label">4G Signal</div>
+    <div class="signal-bars">
+      <div class="bar active" id="bar1"></div>
+      <div class="bar active" id="bar2"></div>
+      <div class="bar active" id="bar3"></div>
+      <div class="bar"        id="bar4"></div>
+      <div class="bar"        id="bar5"></div>
+    </div>
+    <div class="bb-value" id="signal-label" style="font-size:10px;color:var(--label)">GOOD</div>
+  </div>
+  <div class="bb-section" id="stint-section">
+    <div class="bb-label">Driver / Stint</div>
+    <div id="driver-name" onclick="cycleDriver()" title="Click to change driver">SHAWN SEELAN</div>
+    <div class="bb-value" id="stint-timer">00:00:00</div>
+  </div>
+  <div class="bb-section" id="fuel-section">
+    <div class="bb-label">Fuel</div>
+    <div class="fuel-controls">
+      <div class="fuel-val" id="fuel-pct">100%</div>
+      <button class="fuel-btn" onclick="addFuel(-5)">-5</button>
+      <button class="fuel-btn" onclick="addFuel(5)">+5</button>
+      <button id="refuel-btn" onclick="refuel()">REFUEL</button>
+    </div>
+    <div class="fuel-bar-wrap"><div id="fuel-bar"></div></div>
+  </div>
+  <div class="bb-section" id="lap-section">
+    <div class="bb-label">Lap Logger</div>
+    <button id="lap-btn" onclick="recordLap()">LOG LAP</button>
+  </div>
+  <div class="bb-section" id="notes-section">
+    <div class="bb-label">Pit Notes</div>
+    <textarea id="pit-notes" placeholder="Free notes — not logged..."></textarea>
+  </div>
+  <div class="bb-section" id="log-section">
+    <div class="bb-label">Event Log</div>
+    <div id="event-log"></div>
+  </div>
+</div>
+
+<script>
+const LAPS_PER_FUEL    = 12;
+const FUEL_DECREMENT   = 100 / LAPS_PER_FUEL;
+const DRIVERS          = ['SHAWN SEELAN', 'NATASHA SEATTER'];
+const DEFAULT_STREAM_URL = 'http://YOUR_SERVER_IP:8080/live/jrt.m3u8'; // EDIT THIS
+
+const state = {
+  connected: false, raceStarted: false, raceStartTime: null, raceTimerHandle: null,
+  lapCount: 0, lapTimes: [], bestLapMs: null, lapStartTime: null,
+  fuelLevel: 100, driverIdx: 0, stintStartTime: null, stintHandle: null,
+  eventLog: [], hls: null, statsHandle: null, fuelWarned: false,
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('url-input').value = DEFAULT_STREAM_URL;
+  document.getElementById('driver-name').textContent = DRIVERS[0];
+  updateFuelDisplay();
+  logEvent('System ready', '');
+});
+
+function connectStream() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+  disconnectStream(true);
+  const video = document.getElementById('stream-video');
+  if (Hls.isSupported()) {
+    const hls = new Hls({ lowLatencyMode: true, backBufferLength: 5, maxBufferLength: 10, liveSyncDurationCount: 2 });
+    state.hls = hls;
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); onStreamConnected(); });
+    hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) { logEvent('Stream error', 'warn'); onStreamDisconnected(); } });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = url;
+    video.addEventListener('loadedmetadata', () => { video.play().catch(() => {}); onStreamConnected(); }, { once: true });
+    video.addEventListener('error', () => onStreamDisconnected(), { once: true });
+  } else {
+    logEvent('HLS not supported in this browser', 'warn');
+  }
+}
+
+function disconnectStream(silent) {
+  const video = document.getElementById('stream-video');
+  if (state.hls) { state.hls.destroy(); state.hls = null; }
+  video.src = ''; video.load();
+  if (state.statsHandle) { clearInterval(state.statsHandle); state.statsHandle = null; }
+  state.connected = false;
+  if (!silent) { logEvent('Stream disconnected', 'warn'); onStreamDisconnected(); }
+}
+
+function onStreamConnected() {
+  state.connected = true;
+  document.getElementById('no-stream').style.display = 'none';
+  document.getElementById('live-dot').style.display  = 'flex';
+  const cs = document.getElementById('conn-status');
+  cs.textContent = 'CONNECTED'; cs.className = 'connected';
+  if (!state.raceStarted) { startRaceTimer(); state.lapStartTime = Date.now(); }
+  state.statsHandle = setInterval(updateStats, 1000);
+  updateSignalBars(4);
+  logEvent('Stream connected', 'highlight');
+}
+
+function onStreamDisconnected() {
+  state.connected = false;
+  document.getElementById('no-stream').style.display = 'flex';
+  document.getElementById('live-dot').style.display  = 'none';
+  const cs = document.getElementById('conn-status');
+  cs.textContent = 'OFFLINE'; cs.className = '';
+  clearStats(); updateSignalBars(0);
+}
+
+function updateStats() {
+  const video = document.getElementById('stream-video');
+  const hls = state.hls;
+  document.getElementById('stat-bitrate').textContent =
+    (hls && hls.bandwidthEstimate > 0) ? Math.round(hls.bandwidthEstimate / 1000) + ' kbps' : '—';
+  document.getElementById('stat-buffer').textContent =
+    video.buffered.length > 0 ? (video.buffered.end(video.buffered.length - 1) - video.currentTime).toFixed(1) + 's' : '—';
+  document.getElementById('stat-res').textContent =
+    (video.videoWidth && video.videoHeight) ? video.videoWidth + 'x' + video.videoHeight : '—';
+  document.getElementById('stat-latency').textContent =
+    (hls && hls.latency > 0) ? hls.latency.toFixed(1) + 's' : '—';
+  if (hls && hls.bandwidthEstimate > 0) {
+    const k = hls.bandwidthEstimate / 1000;
+    updateSignalBars(k > 1200 ? 5 : k > 900 ? 4 : k > 600 ? 3 : k > 300 ? 2 : 1);
+  }
+}
+
+function clearStats() {
+  ['stat-bitrate','stat-buffer','stat-res','stat-latency'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+}
+
+function startRaceTimer() {
+  if (state.raceStarted) return;
+  state.raceStarted = true;
+  state.raceStartTime = Date.now();
+  startStintTimer();
+  state.raceTimerHandle = setInterval(() => {
+    document.getElementById('race-timer').textContent = formatHMS(Date.now() - state.raceStartTime);
+  }, 1000);
+}
+
+function startStintTimer() {
+  if (state.stintHandle) clearInterval(state.stintHandle);
+  state.stintStartTime = Date.now();
+  state.stintHandle = setInterval(() => {
+    document.getElementById('stint-timer').textContent = formatHMS(Date.now() - state.stintStartTime);
+  }, 1000);
+}
+
+function recordLap() {
+  const now = Date.now();
+  state.lapCount++;
+  let durationMs = null, durationStr = '--:--';
+  if (state.lapStartTime) { durationMs = now - state.lapStartTime; durationStr = formatLapTime(durationMs); }
+  state.lapStartTime = now;
+  let delta = '';
+  if (durationMs !== null) {
+    if (state.bestLapMs === null || durationMs < state.bestLapMs) {
+      state.bestLapMs = durationMs;
+      document.getElementById('best-lap').textContent = durationStr;
+      delta = 'BEST';
+    } else {
+      delta = '+' + formatLapTime(durationMs - state.bestLapMs);
+    }
+  }
+  document.getElementById('lap-count').textContent = state.lapCount;
+  document.getElementById('last-lap').textContent  = durationStr;
+  state.lapTimes.unshift({ lap: state.lapCount, time: formatWallTime(now), duration: durationStr, delta });
+  state.fuelLevel = Math.max(0, state.fuelLevel - FUEL_DECREMENT);
+  updateFuelDisplay();
+  renderLapLog();
+  logEvent('Lap ' + state.lapCount + ' — ' + durationStr + (delta ? ' (' + delta + ')' : ''), delta === 'BEST' ? 'highlight' : '');
+}
+
+function renderLapLog() {
+  document.getElementById('lap-log-body').innerHTML = state.lapTimes.map(r => {
+    const dc = r.delta === 'BEST' ? 'delta-neg' : r.delta.startsWith('+') ? 'delta-pos' : '';
+    return '<tr><td>' + r.lap + '</td><td>' + r.time + '</td><td>' + r.duration + '</td><td class="' + dc + '">' + r.delta + '</td></tr>';
+  }).join('');
+}
+
+function addFuel(delta) {
+  state.fuelLevel = Math.min(100, Math.max(0, state.fuelLevel + delta));
+  updateFuelDisplay();
+}
+
+function refuel() {
+  state.fuelLevel = 100; state.fuelWarned = false;
+  updateFuelDisplay(); logEvent('Refuel — tank full', 'highlight');
+}
+
+function updateFuelDisplay() {
+  const pct = state.fuelLevel;
+  const pctEl = document.getElementById('fuel-pct');
+  const barEl = document.getElementById('fuel-bar');
+  pctEl.textContent = Math.round(pct) + '%';
+  barEl.style.width = pct + '%';
+  if (pct <= 15) {
+    barEl.style.background = 'var(--red)'; pctEl.classList.add('critical');
+    if (!state.fuelWarned) { state.fuelWarned = true; logEvent('FUEL CRITICAL — ' + Math.round(pct) + '% — BOX BOX', 'warn'); }
+  } else if (pct <= 30) {
+    barEl.style.background = 'var(--amber)'; pctEl.classList.remove('critical'); state.fuelWarned = false;
+  } else {
+    barEl.style.background = 'var(--green)'; pctEl.classList.remove('critical'); state.fuelWarned = false;
+  }
+}
+
+function setFlag(btn) {
+  document.querySelectorAll('.flag-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const flag = btn.dataset.flag;
+  logEvent('Flag: ' + flag, flag === 'RED' ? 'warn' : flag === 'GREEN' ? 'highlight' : '');
+}
+
+function cycleDriver() {
+  state.driverIdx = (state.driverIdx + 1) % DRIVERS.length;
+  const name = DRIVERS[state.driverIdx];
+  document.getElementById('driver-name').textContent = name;
+  startStintTimer();
+  logEvent('Driver: ' + name, 'highlight');
+}
+
+function updateSignalBars(active) {
+  for (let i = 1; i <= 5; i++) {
+    const b = document.getElementById('bar' + i);
+    if (b) b.classList.toggle('active', i <= active);
+  }
+  const labels = ['', 'POOR', 'WEAK', 'FAIR', 'GOOD', 'STRONG'];
+  const el = document.getElementById('signal-label');
+  if (el) el.textContent = active > 0 ? labels[active] : 'NO SIG';
+}
+
+function logEvent(msg, type) {
+  state.eventLog.unshift({ time: formatWallTime(Date.now()), msg, type: type || '' });
+  if (state.eventLog.length > 50) state.eventLog.length = 50;
+  const el = document.getElementById('event-log');
+  el.innerHTML = state.eventLog.map(e =>
+    '<div class="log-entry ' + e.type + '"><span class="log-time">' + e.time + '</span><span class="log-msg">' + e.msg + '</span></div>'
+  ).join('');
+}
+
+function formatHMS(ms) {
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return pad(h) + ':' + pad(m) + ':' + pad(ss);
+}
+function formatLapTime(ms) {
+  const totalS = Math.floor(ms / 1000), m = Math.floor(totalS / 60), s = totalS % 60, t = Math.floor((ms % 1000) / 100);
+  return pad(m) + ':' + pad(s) + '.' + t;
+}
+function formatWallTime(ts) {
+  const d = new Date(ts);
+  return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+function pad(n) { return String(n).padStart(2, '0'); }
+</script>
+</body>
+</html>
