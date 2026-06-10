@@ -1,6 +1,6 @@
 # JRT PitCam — Hardware Guide
 
-In-car dashcam hardware list and setup guide for the JRT #518 endurance racing live stream system.
+In-car dashcam hardware list and setup guide for the JRT endurance racing live stream system.
 
 ---
 
@@ -22,9 +22,11 @@ In-car dashcam hardware list and setup guide for the JRT #518 endurance racing l
 **Recommended:** Top-centre of windscreen, behind the roll cage bar for protection.
 
 - Angle slightly downward: capture steering wheel, dash, and forward view
-- Secure all cables with cable ties
+- Secure all cables with cable ties — loose cables are a safety hazard
 - Route USB power cable away from steering column and gear lever
 - Ensure mount does not block driver sightlines
+
+**Alternative:** Dashboard centre, angled up toward windscreen.
 
 ---
 
@@ -37,27 +39,31 @@ Stream URL:     rtmp://YOUR_SERVER_IP/live/jrt    <- EDIT THIS
 Video codec:    H.264
 Resolution:     1280x720 (720p)
 Framerate:      25fps
-Bitrate:        1000-1500 kbps
+Bitrate:        1000-1500 kbps (use 1000 if signal is weak)
 Audio:          Disabled
 Reconnect:      Enable auto-reconnect, 5s interval
 ```
+
+To start streaming: open Larix → tap record button → confirm red dot.
 
 ---
 
 ## SIM / Network Setup
 
-- Dedicated SIM, not a shared hotspot
-- Disable WiFi on the phone entirely
-- Maxis and Celcom have strongest 4G coverage at Sepang
+- Use a **dedicated SIM** — do not share a hotspot with crew
+- Disable WiFi entirely — prevents fallback to slow paddock WiFi
+- Disable VPN if enabled — adds latency
+- At Sepang: Maxis and Celcom have strongest 4G coverage
 - Test signal from pit lane before session — confirm 4G not 3G
 
 ---
 
 ## Power Management
 
-- Plug into car 12V USB charger before session
-- Set screen timeout to Never
+- Plug into car **12V USB charger** before session starts
+- Set screen timeout to **Never**
 - Disable battery optimisation for Larix
+- Ensure phone can breathe — streaming generates heat
 - Keep brightness low
 
 ---
@@ -66,15 +72,15 @@ Reconnect:      Enable auto-reconnect, 5s interval
 
 ```
 [ ] Server running — health-check.sh returns nginx UP
-[ ] Phone mounted, cables tied
-[ ] SIM inserted, showing 4G
-[ ] WiFi disabled
-[ ] Larix RTMP URL set correctly
-[ ] USB power connected
-[ ] Screen timeout: Never
-[ ] Start Larix — confirm red dot
-[ ] health-check.sh — STREAM LIVE
-[ ] Dashboard open — CONNECT — video playing
+[ ] Phone mounted securely, cables tied and routed safely
+[ ] SIM inserted, showing 4G signal
+[ ] WiFi disabled on car phone
+[ ] Larix RTMP URL: rtmp://YOUR_SERVER_IP/live/jrt
+[ ] USB power connected — phone charging
+[ ] Screen timeout set to Never
+[ ] Start Larix stream — confirm red dot
+[ ] Run health-check.sh — confirm STREAM LIVE
+[ ] Pit wall dashboard open — CONNECT — video playing
 ```
 
 ---
@@ -83,8 +89,8 @@ Reconnect:      Enable auto-reconnect, 5s interval
 
 | Symptom | Check |
 |---|---|
-| Stream not in dashboard | Larix red dot showing? Run health-check.sh |
+| Stream not in dashboard | Is Larix red dot showing? Run health-check.sh |
 | Video freezes mid-race | 4G dead zone — hls.js auto-recovers in 5–10s |
-| Larix disconnects | Signal weak — try 750kbps |
-| Phone overheating | Lower bitrate, ensure ventilation |
-| No 4G | Check APN settings, try different carrier |
+| Larix disconnects repeatedly | Signal weak — try 750kbps bitrate |
+| Phone overheating | Remove from enclosed mount, lower bitrate |
+| No 4G at circuit | Check APN settings, try different carrier |
