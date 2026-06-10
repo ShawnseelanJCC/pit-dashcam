@@ -1,0 +1,11 @@
+[Unit]
+Description=JRT PitCam RaceChrono telemetry receiver
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/pitcam/racechrono-server.py
+Restart=always
+User=www-data
+
+[Install]
+WantedBy=multi-user.target

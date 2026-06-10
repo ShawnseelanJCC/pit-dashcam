@@ -50,6 +50,34 @@ Reconnect:   Enable auto-reconnect, 5s interval
 
 ---
 
+## RaceChrono Pro Telemetry (live GPS, speed, lap times)
+
+The dashboard sidebar shows a live telemetry table (speed, heading, lat/lon, altitude) and a lap log timed off Sepang's start/finish line — fed by RaceChrono Pro's built-in UDP live data export, sent from the same phone that's running Larix.
+
+### One-time setup on the car phone
+
+1. Open **RaceChrono Pro** → **Settings → Data sources → Live data**
+2. Set **Send live data** to:
+   ```
+   udp://104.248.151.105:10110
+   ```
+3. Make sure RaceChrono is actively logging a session (start a session before/with the broadcast) — it only sends live data while a session is running.
+
+### Calibration (one-time, do this at Sepang)
+
+The start/finish line used for lap timing is set in `server/racechrono-server.py` (`SF_LINE`). It ships with placeholder coordinates and **must be calibrated**:
+
+1. Drive across the actual start/finish line.
+2. Check `http://104.248.151.105/telemetry` for your live `lat`/`lon`.
+3. Update `SF_LINE` in `server/racechrono-server.py` with two (lat, lon) points spanning the track width at that line.
+4. Redeploy (see Server section below).
+
+### Race day
+
+- Nothing extra to do — once RaceChrono is sending live data, the dashboard's **RaceChrono Telemetry** panel updates automatically (speed, heading, position, fix status) and logs a lap each time the car crosses the start/finish line.
+
+---
+
 ## Server
 
 **Already running.** nginx auto-starts on boot. Nothing to do between events.
@@ -110,8 +138,11 @@ ls /tmp/hls/
 
 ```
 pit-dashcam/
-├── dashboard/index.html      ← pit wall browser UI (single file)
-├── server/nginx.conf         ← nginx + RTMP config deployed on the server
+├── dashboard/index.html         ← pit wall browser UI (single file)
+├── server/
+│   ├── nginx.conf                ← nginx + RTMP config deployed on the server
+│   ├── racechrono-server.py      ← RaceChrono UDP telemetry receiver + lap timer
+│   └── racechrono-server.service ← systemd unit for the telemetry receiver
 ├── scripts/
 │   ├── server-setup.sh       ← one-time server provisioning
 │   └── health-check.sh       ← verify server + stream status
