@@ -153,15 +153,17 @@
   #conn-status { font-family: var(--mono); font-size: 13px; color: var(--dim); margin-bottom: 8px; }
   #conn-status.connected { color: var(--green); }
 
-  #track-map-wrap { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #0d0d0d; border: 1px solid var(--border); border-radius: 2px; }
-  #track-map-wrap svg { width: 100%; height: 100%; display: block; }
-  .track-outline { fill: none; stroke: var(--dim); stroke-width: 2; }
-  .sf-line { stroke: var(--amber); stroke-width: 2; }
-  #car-dot { fill: var(--green); }
-  #car-dot.stale { fill: var(--dim); }
-  .gps-stats { display: flex; justify-content: space-between; margin-top: 6px; font-family: var(--mono); font-size: 11px; }
-  .gps-stats .gps-label { color: var(--label); }
-  .gps-stats .gps-val { color: var(--text); }
+  #telemetry-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
+  #telemetry-table td { padding: 3px 4px; border-bottom: 1px solid #151515; }
+  #telemetry-table td.tm-label { color: var(--label); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+  #telemetry-table td.tm-val { color: var(--text); text-align: right; }
+  #telemetry-table td.tm-val.stale { color: var(--dim); }
+  #telemetry-table td.tm-val.live { color: var(--green); }
+
+  #rc-laps-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; margin-top: 6px; }
+  #rc-laps-table th { color: var(--label); font-size: 9px; letter-spacing: 1px; text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
+  #rc-laps-table td { padding: 3px 4px; border-bottom: 1px solid #151515; color: var(--text); }
+  #rc-laps-table tr:first-child td { color: var(--green); }
 
   #lap-log-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
   #lap-log-table th { color: var(--label); font-size: 9px; letter-spacing: 1px; text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
@@ -299,18 +301,23 @@
       </div>
     </div>
     <div class="sb-section">
-      <div class="sb-title">Track Position — Sepang</div>
-      <div id="track-map-wrap">
-        <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
-          <path class="track-outline" d="M 60,220 C 40,180 40,120 80,90 C 110,65 160,70 190,60 C 230,46 290,40 330,70 C 365,96 360,140 320,155 C 290,166 270,150 250,165 C 225,184 240,225 200,238 C 150,253 90,260 60,220 Z" />
-          <line class="sf-line" x1="55" y1="205" x2="80" y2="235" />
-          <circle id="car-dot" class="stale" cx="55" cy="220" r="6" />
-        </svg>
-      </div>
-      <div class="gps-stats">
-        <span><span class="gps-label">GPS LAPS </span><span class="gps-val" id="gps-lap-count">0</span></span>
-        <span><span class="gps-label">FIX </span><span class="gps-val" id="gps-fix-age">--</span></span>
-      </div>
+      <div class="sb-title">RaceChrono Telemetry</div>
+      <table id="telemetry-table">
+        <tbody>
+          <tr><td class="tm-label">Fix</td><td class="tm-val stale" id="tm-fix">NO FIX</td></tr>
+          <tr><td class="tm-label">Speed</td><td class="tm-val" id="tm-speed">--</td></tr>
+          <tr><td class="tm-label">Heading</td><td class="tm-val" id="tm-heading">--</td></tr>
+          <tr><td class="tm-label">Latitude</td><td class="tm-val" id="tm-lat">--</td></tr>
+          <tr><td class="tm-label">Longitude</td><td class="tm-val" id="tm-lon">--</td></tr>
+          <tr><td class="tm-label">Altitude</td><td class="tm-val" id="tm-alt">--</td></tr>
+          <tr><td class="tm-label">RC Laps</td><td class="tm-val" id="tm-laps">0</td></tr>
+          <tr><td class="tm-label">Last RC Lap</td><td class="tm-val" id="tm-last-lap">--:--.---</td></tr>
+        </tbody>
+      </table>
+      <table id="rc-laps-table">
+        <thead><tr><th>LAP</th><th>TIME</th></tr></thead>
+        <tbody id="rc-laps-body"></tbody>
+      </table>
     </div>
     <div class="sb-section" style="flex:1; overflow-y:auto;">
       <div class="sb-title">Lap Log</div>
@@ -369,9 +376,7 @@ const FUEL_DECREMENT   = 100 / LAPS_PER_FUEL;
 const DRIVERS          = ['SHAWN SEELAN', 'NATASHA SEATTER'];
 const DEFAULT_STREAM_URL = 'http://104.248.151.105:8080/live/jrt.m3u8';
 
-// EDIT THESE — bounding box of Sepang circuit (lat/lon) for mapping GPS fixes onto the SVG track outline.
-const TRACK_BOUNDS = { latMin: 2.7565, latMax: 2.7660, lonMin: 101.7355, lonMax: 101.7440 };
-const GPS_POLL_MS = 1500;
+const TELEMETRY_POLL_MS = 1000;
 
 const state = {
   connected: false, raceStarted: false, raceStartTime: null, raceTimerHandle: null,
@@ -385,34 +390,59 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('driver-name').textContent = DRIVERS[0];
   updateFuelDisplay();
   logEvent('System ready', '');
-  setInterval(pollGps, GPS_POLL_MS);
-  pollGps();
+  setInterval(pollTelemetry, TELEMETRY_POLL_MS);
+  pollTelemetry();
 });
 
-let lastGpsLapCount = 0;
+let lastRcLapCount = 0;
 
-function pollGps() {
-  fetch('/gps').then(r => r.json()).then(d => {
-    const dot = document.getElementById('car-dot');
+function formatLapTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds - m * 60;
+  return m + ':' + s.toFixed(3).padStart(6, '0');
+}
+
+function pollTelemetry() {
+  fetch('/telemetry').then(r => r.json()).then(d => {
+    const fixEl = document.getElementById('tm-fix');
     if (d.lat == null || d.lon == null) {
-      dot.classList.add('stale');
-      document.getElementById('gps-fix-age').textContent = 'NO FIX';
+      fixEl.textContent = 'NO FIX';
+      fixEl.className = 'tm-val stale';
       return;
     }
-    const x = ((d.lon - TRACK_BOUNDS.lonMin) / (TRACK_BOUNDS.lonMax - TRACK_BOUNDS.lonMin)) * 400;
-    const y = (1 - (d.lat - TRACK_BOUNDS.latMin) / (TRACK_BOUNDS.latMax - TRACK_BOUNDS.latMin)) * 300;
-    dot.setAttribute('cx', Math.max(0, Math.min(400, x)));
-    dot.setAttribute('cy', Math.max(0, Math.min(300, y)));
     const age = Date.now() / 1000 - d.ts;
-    dot.classList.toggle('stale', age > 10);
-    document.getElementById('gps-fix-age').textContent = age < 10 ? 'LIVE' : Math.round(age) + 's ago';
-    document.getElementById('gps-lap-count').textContent = d.lap_count;
-    if (d.lap_count > lastGpsLapCount) {
-      logEvent('GPS: start/finish crossing — lap ' + d.lap_count, 'highlight');
-      lastGpsLapCount = d.lap_count;
+    const isLive = age < 10;
+    fixEl.textContent = isLive ? 'LIVE' : Math.round(age) + 's ago';
+    fixEl.className = 'tm-val ' + (isLive ? 'live' : 'stale');
+
+    document.getElementById('tm-speed').textContent   = d.speed_kmh != null ? d.speed_kmh.toFixed(1) + ' km/h' : '--';
+    document.getElementById('tm-heading').textContent = d.heading != null ? d.heading.toFixed(0) + '°' : '--';
+    document.getElementById('tm-lat').textContent     = d.lat.toFixed(6);
+    document.getElementById('tm-lon').textContent     = d.lon.toFixed(6);
+    document.getElementById('tm-alt').textContent     = d.alt != null ? d.alt.toFixed(1) + ' m' : '--';
+    document.getElementById('tm-laps').textContent    = d.lap_count;
+
+    if (d.laps && d.laps.length) {
+      document.getElementById('tm-last-lap').textContent = formatLapTime(d.laps[0].duration);
+    }
+
+    if (d.lap_count > lastRcLapCount) {
+      const last = d.laps && d.laps[0];
+      if (last) logEvent('RaceChrono lap ' + last.lap + ' — ' + formatLapTime(last.duration), 'highlight');
+      lastRcLapCount = d.lap_count;
+
+      const tbody = document.getElementById('rc-laps-body');
+      tbody.innerHTML = '';
+      (d.laps || []).forEach(lap => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + lap.lap + '</td><td>' + formatLapTime(lap.duration) + '</td>';
+        tbody.appendChild(tr);
+      });
     }
   }).catch(() => {
-    document.getElementById('gps-fix-age').textContent = 'NO FIX';
+    const fixEl = document.getElementById('tm-fix');
+    fixEl.textContent = 'NO FIX';
+    fixEl.className = 'tm-val stale';
   });
 }
 

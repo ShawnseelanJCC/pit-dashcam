@@ -33,19 +33,20 @@ nginx -t
 mkdir -p /var/www/pitcam
 cp "$SCRIPT_DIR/../dashboard/index.html" /var/www/pitcam/index.html
 
-echo "[5/8] Deploying GPS tracker service..."
+echo "[5/8] Deploying RaceChrono telemetry service..."
 mkdir -p /opt/pitcam
-cp "$SCRIPT_DIR/../server/gps-server.py" /opt/pitcam/gps-server.py
-cp "$SCRIPT_DIR/../server/gps-server.service" /etc/systemd/system/gps-server.service
+cp "$SCRIPT_DIR/../server/racechrono-server.py" /opt/pitcam/racechrono-server.py
+cp "$SCRIPT_DIR/../server/racechrono-server.service" /etc/systemd/system/racechrono-server.service
 systemctl daemon-reload
-systemctl enable gps-server
-systemctl restart gps-server
+systemctl enable racechrono-server
+systemctl restart racechrono-server
 
 echo "[6/8] Configuring UFW firewall..."
-ufw allow 22/tcp    comment 'SSH'
-ufw allow 80/tcp    comment 'HTTP'
-ufw allow 1935/tcp  comment 'RTMP ingest'
-ufw allow 8080/tcp  comment 'HLS HTTP'
+ufw allow 22/tcp     comment 'SSH'
+ufw allow 80/tcp     comment 'HTTP'
+ufw allow 1935/tcp   comment 'RTMP ingest'
+ufw allow 8080/tcp   comment 'HLS HTTP'
+ufw allow 10110/udp  comment 'RaceChrono live telemetry'
 ufw --force enable
 
 echo "[7/8] Enabling and starting nginx..."
