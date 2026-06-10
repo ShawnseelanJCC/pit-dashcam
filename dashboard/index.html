@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let lastRcLapCount = 0;
 
-function formatLapTime(seconds) {
+function formatLapTimeSec(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds - m * 60;
   return m + ':' + s.toFixed(3).padStart(6, '0');
@@ -423,19 +423,19 @@ function pollTelemetry() {
     document.getElementById('tm-laps').textContent    = d.lap_count;
 
     if (d.laps && d.laps.length) {
-      document.getElementById('tm-last-lap').textContent = formatLapTime(d.laps[0].duration);
+      document.getElementById('tm-last-lap').textContent = formatLapTimeSec(d.laps[0].duration);
     }
 
     if (d.lap_count > lastRcLapCount) {
       const last = d.laps && d.laps[0];
-      if (last) logEvent('RaceChrono lap ' + last.lap + ' — ' + formatLapTime(last.duration), 'highlight');
+      if (last) logEvent('RaceChrono lap ' + last.lap + ' — ' + formatLapTimeSec(last.duration), 'highlight');
       lastRcLapCount = d.lap_count;
 
       const tbody = document.getElementById('rc-laps-body');
       tbody.innerHTML = '';
       (d.laps || []).forEach(lap => {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + lap.lap + '</td><td>' + formatLapTime(lap.duration) + '</td>';
+        tr.innerHTML = '<td>' + lap.lap + '</td><td>' + formatLapTimeSec(lap.duration) + '</td>';
         tbody.appendChild(tr);
       });
     }
