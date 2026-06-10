@@ -153,6 +153,16 @@
   #conn-status { font-family: var(--mono); font-size: 13px; color: var(--dim); margin-bottom: 8px; }
   #conn-status.connected { color: var(--green); }
 
+  #track-map-wrap { position: relative; width: 100%; aspect-ratio: 4 / 3; background: #0d0d0d; border: 1px solid var(--border); border-radius: 2px; }
+  #track-map-wrap svg { width: 100%; height: 100%; display: block; }
+  .track-outline { fill: none; stroke: var(--dim); stroke-width: 2; }
+  .sf-line { stroke: var(--amber); stroke-width: 2; }
+  #car-dot { fill: var(--green); }
+  #car-dot.stale { fill: var(--dim); }
+  .gps-stats { display: flex; justify-content: space-between; margin-top: 6px; font-family: var(--mono); font-size: 11px; }
+  .gps-stats .gps-label { color: var(--label); }
+  .gps-stats .gps-val { color: var(--text); }
+
   #lap-log-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
   #lap-log-table th { color: var(--label); font-size: 9px; letter-spacing: 1px; text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
   #lap-log-table td { padding: 3px 4px; border-bottom: 1px solid #151515; color: var(--text); }
@@ -288,6 +298,20 @@
         <div class="stat-item"><div class="stat-label">Latency</div><div class="stat-val" id="stat-latency">—</div></div>
       </div>
     </div>
+    <div class="sb-section">
+      <div class="sb-title">Track Position — Sepang</div>
+      <div id="track-map-wrap">
+        <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+          <path class="track-outline" d="M 60,220 C 40,180 40,120 80,90 C 110,65 160,70 190,60 C 230,46 290,40 330,70 C 365,96 360,140 320,155 C 290,166 270,150 250,165 C 225,184 240,225 200,238 C 150,253 90,260 60,220 Z" />
+          <line class="sf-line" x1="55" y1="205" x2="80" y2="235" />
+          <circle id="car-dot" class="stale" cx="55" cy="220" r="6" />
+        </svg>
+      </div>
+      <div class="gps-stats">
+        <span><span class="gps-label">GPS LAPS </span><span class="gps-val" id="gps-lap-count">0</span></span>
+        <span><span class="gps-label">FIX </span><span class="gps-val" id="gps-fix-age">--</span></span>
+      </div>
+    </div>
     <div class="sb-section" style="flex:1; overflow-y:auto;">
       <div class="sb-title">Lap Log</div>
       <table id="lap-log-table">
@@ -345,6 +369,10 @@ const FUEL_DECREMENT   = 100 / LAPS_PER_FUEL;
 const DRIVERS          = ['SHAWN SEELAN', 'NATASHA SEATTER'];
 const DEFAULT_STREAM_URL = 'http://104.248.151.105:8080/live/jrt.m3u8';
 
+// EDIT THESE — bounding box of Sepang circuit (lat/lon) for mapping GPS fixes onto the SVG track outline.
+const TRACK_BOUNDS = { latMin: 2.7565, latMax: 2.7660, lonMin: 101.7355, lonMax: 101.7440 };
+const GPS_POLL_MS = 1500;
+
 const state = {
   connected: false, raceStarted: false, raceStartTime: null, raceTimerHandle: null,
   lapCount: 0, lapTimes: [], bestLapMs: null, lapStartTime: null,
@@ -357,7 +385,36 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('driver-name').textContent = DRIVERS[0];
   updateFuelDisplay();
   logEvent('System ready', '');
+  setInterval(pollGps, GPS_POLL_MS);
+  pollGps();
 });
+
+let lastGpsLapCount = 0;
+
+function pollGps() {
+  fetch('/gps').then(r => r.json()).then(d => {
+    const dot = document.getElementById('car-dot');
+    if (d.lat == null || d.lon == null) {
+      dot.classList.add('stale');
+      document.getElementById('gps-fix-age').textContent = 'NO FIX';
+      return;
+    }
+    const x = ((d.lon - TRACK_BOUNDS.lonMin) / (TRACK_BOUNDS.lonMax - TRACK_BOUNDS.lonMin)) * 400;
+    const y = (1 - (d.lat - TRACK_BOUNDS.latMin) / (TRACK_BOUNDS.latMax - TRACK_BOUNDS.latMin)) * 300;
+    dot.setAttribute('cx', Math.max(0, Math.min(400, x)));
+    dot.setAttribute('cy', Math.max(0, Math.min(300, y)));
+    const age = Date.now() / 1000 - d.ts;
+    dot.classList.toggle('stale', age > 10);
+    document.getElementById('gps-fix-age').textContent = age < 10 ? 'LIVE' : Math.round(age) + 's ago';
+    document.getElementById('gps-lap-count').textContent = d.lap_count;
+    if (d.lap_count > lastGpsLapCount) {
+      logEvent('GPS: start/finish crossing — lap ' + d.lap_count, 'highlight');
+      lastGpsLapCount = d.lap_count;
+    }
+  }).catch(() => {
+    document.getElementById('gps-fix-age').textContent = 'NO FIX';
+  });
+}
 
 function connectStream() {
   const url = document.getElementById('url-input').value.trim();
