@@ -27,24 +27,32 @@ mkdir -p /tmp/hls
 chown www-data:www-data /tmp/hls
 chmod 755 /tmp/hls
 
-echo "[4/7] Deploying nginx.conf and dashboard..."
+echo "[4/8] Deploying nginx.conf and dashboard..."
 cp "$SCRIPT_DIR/../server/nginx.conf" /etc/nginx/nginx.conf
 nginx -t
 mkdir -p /var/www/pitcam
 cp "$SCRIPT_DIR/../dashboard/index.html" /var/www/pitcam/index.html
 
-echo "[5/7] Configuring UFW firewall..."
+echo "[5/8] Deploying GPS tracker service..."
+mkdir -p /opt/pitcam
+cp "$SCRIPT_DIR/../server/gps-server.py" /opt/pitcam/gps-server.py
+cp "$SCRIPT_DIR/../server/gps-server.service" /etc/systemd/system/gps-server.service
+systemctl daemon-reload
+systemctl enable gps-server
+systemctl restart gps-server
+
+echo "[6/8] Configuring UFW firewall..."
 ufw allow 22/tcp    comment 'SSH'
 ufw allow 80/tcp    comment 'HTTP'
 ufw allow 1935/tcp  comment 'RTMP ingest'
 ufw allow 8080/tcp  comment 'HLS HTTP'
 ufw --force enable
 
-echo "[6/7] Enabling and starting nginx..."
+echo "[7/8] Enabling and starting nginx..."
 systemctl enable nginx
 systemctl restart nginx
 
-echo "[7/7] Done!"
+echo "[8/8] Done!"
 echo ""
 SERVER_IP=$(hostname -I | awk '{print $1}')
 echo "============================================"
