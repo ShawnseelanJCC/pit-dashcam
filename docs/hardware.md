@@ -1,6 +1,6 @@
 # JRT PitCam — Hardware Guide
 
-In-car dashcam hardware list and setup guide for the JRT #518 endurance racing live stream system.
+In-car dashcam hardware list and setup guide for the JRT endurance racing live stream system.
 
 ---
 

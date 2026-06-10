@@ -1,6 +1,6 @@
-# JRT PitCam — #518 Endurance Live Stream
+# JRT PitCam — Endurance Live Stream
 
-Phone-to-browser live video streaming for the JRT #518 endurance racing pit wall. The car phone streams over 4G → DigitalOcean Singapore relay server → pit wall browser dashboard. ~2–3 second end-to-end latency.
+Phone-to-browser live video streaming for the JRT endurance racing pit wall. The car phone streams over 4G → DigitalOcean Singapore relay server → pit wall browser dashboard. ~2–3 second end-to-end latency.
 
 ---
 
