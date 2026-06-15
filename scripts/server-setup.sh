@@ -22,10 +22,13 @@ DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 echo "[2/7] Installing nginx, rtmp module, ufw, curl..."
 apt-get install -y nginx libnginx-mod-rtmp ufw curl
 
-echo "[3/7] Creating /tmp/hls directory..."
+echo "[3/7] Creating /tmp/hls and /var/recordings directories..."
 mkdir -p /tmp/hls
 chown www-data:www-data /tmp/hls
 chmod 755 /tmp/hls
+mkdir -p /var/recordings
+chown www-data:www-data /var/recordings
+chmod 755 /var/recordings
 
 echo "[4/8] Deploying nginx.conf and dashboard..."
 cp "$SCRIPT_DIR/../server/nginx.conf" /etc/nginx/nginx.conf
