@@ -153,18 +153,6 @@
   #conn-status { font-family: var(--mono); font-size: 13px; color: var(--dim); margin-bottom: 8px; }
   #conn-status.connected { color: var(--green); }
 
-  #telemetry-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
-  #telemetry-table td { padding: 3px 4px; border-bottom: 1px solid #151515; }
-  #telemetry-table td.tm-label { color: var(--label); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
-  #telemetry-table td.tm-val { color: var(--text); text-align: right; }
-  #telemetry-table td.tm-val.stale { color: var(--dim); }
-  #telemetry-table td.tm-val.live { color: var(--green); }
-
-  #rc-laps-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; margin-top: 6px; }
-  #rc-laps-table th { color: var(--label); font-size: 9px; letter-spacing: 1px; text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
-  #rc-laps-table td { padding: 3px 4px; border-bottom: 1px solid #151515; color: var(--text); }
-  #rc-laps-table tr:first-child td { color: var(--green); }
-
   #lap-log-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
   #lap-log-table th { color: var(--label); font-size: 9px; letter-spacing: 1px; text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
   #lap-log-table td { padding: 3px 4px; border-bottom: 1px solid #151515; color: var(--text); }
@@ -300,25 +288,6 @@
         <div class="stat-item"><div class="stat-label">Latency</div><div class="stat-val" id="stat-latency">—</div></div>
       </div>
     </div>
-    <div class="sb-section">
-      <div class="sb-title">RaceChrono Telemetry</div>
-      <table id="telemetry-table">
-        <tbody>
-          <tr><td class="tm-label">Fix</td><td class="tm-val stale" id="tm-fix">NO FIX</td></tr>
-          <tr><td class="tm-label">Speed</td><td class="tm-val" id="tm-speed">--</td></tr>
-          <tr><td class="tm-label">Heading</td><td class="tm-val" id="tm-heading">--</td></tr>
-          <tr><td class="tm-label">Latitude</td><td class="tm-val" id="tm-lat">--</td></tr>
-          <tr><td class="tm-label">Longitude</td><td class="tm-val" id="tm-lon">--</td></tr>
-          <tr><td class="tm-label">Altitude</td><td class="tm-val" id="tm-alt">--</td></tr>
-          <tr><td class="tm-label">RC Laps</td><td class="tm-val" id="tm-laps">0</td></tr>
-          <tr><td class="tm-label">Last RC Lap</td><td class="tm-val" id="tm-last-lap">--:--.---</td></tr>
-        </tbody>
-      </table>
-      <table id="rc-laps-table">
-        <thead><tr><th>LAP</th><th>TIME</th></tr></thead>
-        <tbody id="rc-laps-body"></tbody>
-      </table>
-    </div>
     <div class="sb-section" style="flex:1; overflow-y:auto;">
       <div class="sb-title">Lap Log</div>
       <table id="lap-log-table">
@@ -376,8 +345,6 @@ const FUEL_DECREMENT   = 100 / LAPS_PER_FUEL;
 const DRIVERS          = ['SHAWN SEELAN', 'NATASHA SEATTER', 'JAY WONG'];
 const DEFAULT_STREAM_URL = 'http://104.248.151.105:8080/live/jrt.m3u8';
 
-const TELEMETRY_POLL_MS = 1000;
-
 const state = {
   connected: false, raceStarted: false, raceStartTime: null, raceTimerHandle: null,
   lapCount: 0, lapTimes: [], bestLapMs: null, lapStartTime: null,
@@ -390,61 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('driver-name').textContent = DRIVERS[0];
   updateFuelDisplay();
   logEvent('System ready', '');
-  setInterval(pollTelemetry, TELEMETRY_POLL_MS);
-  pollTelemetry();
 });
-
-let lastRcLapCount = 0;
-
-function formatLapTimeSec(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = seconds - m * 60;
-  return m + ':' + s.toFixed(3).padStart(6, '0');
-}
-
-function pollTelemetry() {
-  fetch('/telemetry').then(r => r.json()).then(d => {
-    const fixEl = document.getElementById('tm-fix');
-    if (d.lat == null || d.lon == null) {
-      fixEl.textContent = 'NO FIX';
-      fixEl.className = 'tm-val stale';
-      return;
-    }
-    const age = Date.now() / 1000 - d.ts;
-    const isLive = age < 10;
-    fixEl.textContent = isLive ? 'LIVE' : Math.round(age) + 's ago';
-    fixEl.className = 'tm-val ' + (isLive ? 'live' : 'stale');
-
-    document.getElementById('tm-speed').textContent   = d.speed_kmh != null ? d.speed_kmh.toFixed(1) + ' km/h' : '--';
-    document.getElementById('tm-heading').textContent = d.heading != null ? d.heading.toFixed(0) + '°' : '--';
-    document.getElementById('tm-lat').textContent     = d.lat.toFixed(6);
-    document.getElementById('tm-lon').textContent     = d.lon.toFixed(6);
-    document.getElementById('tm-alt').textContent     = d.alt != null ? d.alt.toFixed(1) + ' m' : '--';
-    document.getElementById('tm-laps').textContent    = d.lap_count;
-
-    if (d.laps && d.laps.length) {
-      document.getElementById('tm-last-lap').textContent = formatLapTimeSec(d.laps[0].duration);
-    }
-
-    if (d.lap_count > lastRcLapCount) {
-      const last = d.laps && d.laps[0];
-      if (last) logEvent('RaceChrono lap ' + last.lap + ' — ' + formatLapTimeSec(last.duration), 'highlight');
-      lastRcLapCount = d.lap_count;
-
-      const tbody = document.getElementById('rc-laps-body');
-      tbody.innerHTML = '';
-      (d.laps || []).forEach(lap => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + lap.lap + '</td><td>' + formatLapTimeSec(lap.duration) + '</td>';
-        tbody.appendChild(tr);
-      });
-    }
-  }).catch(() => {
-    const fixEl = document.getElementById('tm-fix');
-    fixEl.textContent = 'NO FIX';
-    fixEl.className = 'tm-val stale';
-  });
-}
 
 function connectStream() {
   const url = document.getElementById('url-input').value.trim();
