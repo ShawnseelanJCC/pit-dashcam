@@ -211,6 +211,12 @@
   #lap-btn:hover { background: var(--amber); color: #000; }
   #lap-btn:active { transform: scale(0.97); }
 
+  #record-section { min-width: 110px; align-items: center; }
+  #record-btn { font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 1px; padding: 8px 12px; border: 1.5px solid var(--red); background: transparent; color: var(--red); cursor: pointer; border-radius: 2px; width: 100%; }
+  #record-btn:hover { background: var(--red); color: #fff; }
+  #record-btn.recording { background: var(--red); color: #fff; animation: pulse 1.5s infinite; }
+  #record-timer { font-family: var(--mono); font-size: 11px; color: var(--label); margin-top: 4px; }
+
   #notes-section { flex: 1; }
   #pit-notes { width: 100%; height: 72px; background: #0d0d0d; border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 7px; resize: none; border-radius: 2px; }
   #pit-notes:focus { outline: none; border-color: var(--blue); }
@@ -340,6 +346,11 @@
     <div class="bb-label">Lap Logger</div>
     <button id="lap-btn" onclick="recordLap()">LOG LAP</button>
   </div>
+  <div class="bb-section" id="record-section">
+    <div class="bb-label">Screen Recording</div>
+    <button id="record-btn" onclick="toggleRecording()">⏺ START REC</button>
+    <div id="record-timer">00:00:00</div>
+  </div>
   <div class="bb-section" id="notes-section">
     <div class="bb-label">Pit Notes</div>
     <textarea id="pit-notes" placeholder="Free notes — not logged..."></textarea>
@@ -361,6 +372,7 @@ const state = {
   lapCount: 0, lapTimes: [], bestLapMs: null, lapStartTime: null,
   fuelLevel: 100, driverIdx: 0, stintStartTime: null, stintHandle: null,
   eventLog: [], hls: null, statsHandle: null, fuelWarned: false,
+  recording: false, recorder: null, recordChunks: [], recordStartTime: null, recordHandle: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -536,6 +548,83 @@ function updateFuelDisplay() {
   } else {
     barEl.style.background = 'var(--green)'; pctEl.classList.remove('critical'); state.fuelWarned = false;
   }
+}
+
+async function toggleRecording() {
+  if (state.recording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
+async function startRecording() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    logEvent('Screen recording needs HTTPS or localhost', 'warn');
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+  } catch (err) {
+    logEvent('Screen recording cancelled', 'warn');
+    return;
+  }
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+  const recorder = new MediaRecorder(stream, { mimeType });
+  state.recordChunks = [];
+  recorder.ondataavailable = e => { if (e.data.size > 0) state.recordChunks.push(e.data); };
+  recorder.onstop = () => {
+    const blob = new Blob(state.recordChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'jrt-pitcam-' + formatFileTimestamp(new Date()) + '.webm';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    stream.getTracks().forEach(t => t.stop());
+    logEvent('Recording saved — ' + a.download, 'highlight');
+  };
+  stream.getVideoTracks()[0].addEventListener('ended', () => { if (state.recording) stopRecording(); });
+  recorder.start();
+  state.recorder = recorder;
+  state.recording = true;
+  state.recordStartTime = Date.now();
+  state.recordHandle = setInterval(updateRecordTimer, 1000);
+  updateRecordButton();
+  logEvent('Recording started — pick the PitCam tab/window to capture', 'highlight');
+}
+
+function stopRecording() {
+  if (!state.recorder) return;
+  state.recorder.stop();
+  state.recorder = null;
+  state.recording = false;
+  if (state.recordHandle) { clearInterval(state.recordHandle); state.recordHandle = null; }
+  document.getElementById('record-timer').textContent = '00:00:00';
+  updateRecordButton();
+  logEvent('Recording stopped', '');
+}
+
+function updateRecordButton() {
+  const btn = document.getElementById('record-btn');
+  if (state.recording) {
+    btn.textContent = '⏹ STOP REC';
+    btn.classList.add('recording');
+  } else {
+    btn.textContent = '⏺ START REC';
+    btn.classList.remove('recording');
+  }
+}
+
+function updateRecordTimer() {
+  document.getElementById('record-timer').textContent = formatHMS(Date.now() - state.recordStartTime);
+}
+
+function formatFileTimestamp(d) {
+  return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
 }
 
 function setFlag(btn) {
