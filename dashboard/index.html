@@ -550,28 +550,37 @@ function updateFuelDisplay() {
   }
 }
 
-async function toggleRecording() {
+function toggleRecording() {
   if (state.recording) {
     stopRecording();
   } else {
-    await startRecording();
+    startRecording();
   }
 }
 
-async function startRecording() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-    logEvent('Screen recording needs HTTPS or localhost', 'warn');
+function startRecording() {
+  const video = document.getElementById('stream-video');
+  if (!video.videoWidth || !video.videoHeight) {
+    logEvent('Connect the stream before recording', 'warn');
     return;
   }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
-  } catch (err) {
-    logEvent('Screen recording cancelled', 'warn');
+  if (!HTMLCanvasElement.prototype.captureStream) {
+    logEvent('Recording not supported in this browser', 'warn');
     return;
   }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext('2d');
+
+  const canvasStream = canvas.captureStream(30);
+  let audioTracks = [];
+  try { audioTracks = video.captureStream ? video.captureStream().getAudioTracks() : []; } catch (e) {}
+  const combined = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+
   const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm';
-  const recorder = new MediaRecorder(stream, { mimeType });
+  const recorder = new MediaRecorder(combined, { mimeType });
   state.recordChunks = [];
   recorder.ondataavailable = e => { if (e.data.size > 0) state.recordChunks.push(e.data); };
   recorder.onstop = () => {
@@ -584,17 +593,64 @@ async function startRecording() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    stream.getTracks().forEach(t => t.stop());
+    combined.getTracks().forEach(t => t.stop());
     logEvent('Recording saved — ' + a.download, 'highlight');
   };
-  stream.getVideoTracks()[0].addEventListener('ended', () => { if (state.recording) stopRecording(); });
+
   recorder.start();
   state.recorder = recorder;
   state.recording = true;
   state.recordStartTime = Date.now();
   state.recordHandle = setInterval(updateRecordTimer, 1000);
   updateRecordButton();
-  logEvent('Recording started — pick the PitCam tab/window to capture', 'highlight');
+  logEvent('Recording started', 'highlight');
+
+  const drawFrame = () => {
+    if (!state.recording) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    drawRecordingOverlay(ctx, canvas.width, canvas.height);
+    requestAnimationFrame(drawFrame);
+  };
+  drawFrame();
+}
+
+function drawRecordingOverlay(ctx, w, h) {
+  const cl = Math.round(w * 0.02);
+  const lw = Math.max(2, Math.round(w * 0.0015));
+  ctx.strokeStyle = '#e8001d';
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.moveTo(10, 10 + cl); ctx.lineTo(10, 10); ctx.lineTo(10 + cl, 10);
+  ctx.moveTo(w - 10 - cl, 10); ctx.lineTo(w - 10, 10); ctx.lineTo(w - 10, 10 + cl);
+  ctx.moveTo(10, h - 10 - cl); ctx.lineTo(10, h - 10); ctx.lineTo(10 + cl, h - 10);
+  ctx.moveTo(w - 10 - cl, h - 10); ctx.lineTo(w - 10, h - 10); ctx.lineTo(w - 10, h - 10 - cl);
+  ctx.stroke();
+
+  const barH = Math.round(h * 0.07);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, h - barH, w, barH);
+
+  const raceTimer = document.getElementById('race-timer').textContent;
+  const lapCount  = document.getElementById('lap-count').textContent;
+  const lastLap   = document.getElementById('last-lap').textContent;
+  const bestLap   = document.getElementById('best-lap').textContent;
+  const driver    = document.getElementById('driver-name').textContent;
+  const fuel      = document.getElementById('fuel-pct').textContent;
+  const flagBtn   = document.querySelector('.flag-btn.active');
+  const flag      = flagBtn ? flagBtn.dataset.flag : '';
+
+  const fontSize = Math.round(h * 0.03);
+  ctx.font = fontSize + 'px "Share Tech Mono", monospace';
+  ctx.fillStyle = '#e0e0e0';
+  ctx.textBaseline = 'middle';
+  const text = 'JRT  ' + driver + '  |  RACE ' + raceTimer + '  |  LAP ' + lapCount +
+    '  LAST ' + lastLap + '  BEST ' + bestLap + '  |  FUEL ' + fuel + (flag ? '  |  ' + flag : '');
+  ctx.fillText(text, 14, h - barH / 2);
+
+  ctx.fillStyle = '#e8001d';
+  ctx.beginPath();
+  ctx.arc(w - 22, 22, Math.max(5, w * 0.006), 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function stopRecording() {
