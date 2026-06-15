@@ -116,6 +116,16 @@
   }
   #live-dot .live-label { font-family: var(--mono); font-size: 10px; color: var(--red); letter-spacing: 2px; }
 
+  #sound-btn {
+    position: absolute; top: 12px; left: 14px; z-index: 4;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+    padding: 5px 10px; border-radius: 2px; border: 1.5px solid var(--dim);
+    background: rgba(0,0,0,0.5); color: var(--dim); cursor: pointer; pointer-events: auto;
+    transition: all .15s;
+  }
+  #sound-btn:hover { border-color: var(--text); color: var(--text); }
+  #sound-btn.on { border-color: var(--green); color: var(--green); }
+
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
   #sidebar {
@@ -267,6 +277,7 @@
       <div class="dot"></div>
       <span class="live-label">LIVE</span>
     </div>
+    <button id="sound-btn" onclick="toggleSound()">🔇 SOUND OFF</button>
   </div>
 
   <div id="sidebar">
@@ -380,6 +391,21 @@ function connectStream() {
   }
 }
 
+function toggleSound() {
+  const video = document.getElementById('stream-video');
+  const btn = document.getElementById('sound-btn');
+  video.muted = !video.muted;
+  if (video.muted) {
+    btn.textContent = '🔇 SOUND OFF';
+    btn.classList.remove('on');
+  } else {
+    video.volume = 1;
+    btn.textContent = '🔊 SOUND ON';
+    btn.classList.add('on');
+    logEvent('Audio unmuted', 'highlight');
+  }
+}
+
 function disconnectStream(silent) {
   const video = document.getElementById('stream-video');
   if (state.hls) { state.hls.destroy(); state.hls = null; }
@@ -407,6 +433,9 @@ function onStreamDisconnected() {
   document.getElementById('live-dot').style.display  = 'none';
   const cs = document.getElementById('conn-status');
   cs.textContent = 'OFFLINE'; cs.className = '';
+  const soundBtn = document.getElementById('sound-btn');
+  soundBtn.textContent = '🔇 SOUND OFF';
+  soundBtn.classList.remove('on');
   clearStats(); updateSignalBars(0);
 }
 
