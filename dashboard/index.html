@@ -159,9 +159,10 @@
     font-family: var(--mono); font-size: 8px; color: var(--label);
     letter-spacing: 2px; text-align: center; margin-bottom: 8px; text-transform: uppercase;
   }
-  #fs-track-svg { width: 155px; height: 130px; display: block; }
+  #fs-track-svg { width: 185px; height: 142px; display: block; }
   .track-glow { fill: none; stroke: rgba(0,232,122,0.18); stroke-width: 9; stroke-linejoin: round; stroke-linecap: round; }
   .track-line { fill: none; stroke: #00e87a; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+  .track-pit  { fill: none; stroke: rgba(255,255,255,0.25); stroke-width: 2; stroke-linecap: round; }
   .track-sf   { fill: var(--red); }
 
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
@@ -328,12 +329,84 @@
       </div>
       <div id="fs-track-wrap">
         <div id="fs-track-label">Sepang International Circuit</div>
-        <svg id="fs-track-svg" viewBox="0 0 185 162" xmlns="http://www.w3.org/2000/svg">
-          <!-- Sepang International Circuit — approximate layout, clockwise -->
-          <path class="track-glow" d="M 148,22 C 158,22 165,32 162,46 L 160,68 C 158,83 148,91 135,89 L 112,87 C 98,85 90,75 90,61 L 90,47 C 90,33 80,25 66,27 L 48,31 C 34,35 26,47 26,61 L 26,83 C 26,97 36,105 50,103 L 68,101 C 82,99 90,111 88,125 L 86,137 C 84,147 74,151 62,149 L 40,147 C 28,145 20,135 20,123 L 20,51 C 20,37 30,27 44,25 L 100,21 C 118,19 136,19 148,22 Z"/>
-          <path class="track-line"  d="M 148,22 C 158,22 165,32 162,46 L 160,68 C 158,83 148,91 135,89 L 112,87 C 98,85 90,75 90,61 L 90,47 C 90,33 80,25 66,27 L 48,31 C 34,35 26,47 26,61 L 26,83 C 26,97 36,105 50,103 L 68,101 C 82,99 90,111 88,125 L 86,137 C 84,147 74,151 62,149 L 40,147 C 28,145 20,135 20,123 L 20,51 C 20,37 30,27 44,25 L 100,21 C 118,19 136,19 148,22 Z"/>
-          <!-- Start/Finish line -->
-          <rect class="track-sf" x="144" y="55" width="10" height="3" rx="1"/>
+        <svg id="fs-track-svg" viewBox="0 0 540 415" xmlns="http://www.w3.org/2000/svg">
+          <!-- Sepang International Circuit — traced from official layout -->
+          <!-- Pit lane (parallel to main straight, slightly above) -->
+          <path class="track-pit" d="M 165,200 C 260,198 370,197 462,200"/>
+          <!-- Track glow -->
+          <path class="track-glow" d="
+            M 60,208
+            C 48,208 38,214 36,225
+            C 34,238 40,250 53,255
+            C 66,260 80,254 86,242
+            C 92,230 90,216 96,202
+            C 106,180 122,158 145,138
+            C 175,112 210,86 248,64
+            C 270,50 294,34 318,24
+            C 340,15 364,16 380,30
+            C 395,44 398,62 390,80
+            C 380,98 368,112 368,128
+            C 370,144 382,156 396,166
+            C 415,180 440,192 462,202
+            C 478,210 492,218 500,230
+            C 508,244 506,260 496,270
+            C 484,280 468,280 455,272
+            C 440,264 422,256 402,252
+            C 378,248 354,248 334,252
+            C 316,256 303,264 296,278
+            C 288,292 286,308 293,322
+            C 302,338 315,352 318,368
+            C 319,382 312,394 298,399
+            C 282,406 262,406 248,399
+            C 232,390 224,375 228,360
+            C 232,344 240,330 234,318
+            C 226,304 212,298 196,300
+            C 178,302 164,313 154,327
+            C 144,342 146,358 158,368
+            C 172,378 188,376 198,364
+            C 210,350 214,334 210,318
+            C 206,300 198,288 192,276
+            C 186,262 181,250 176,238
+            C 172,226 166,214 160,208
+            Z"/>
+          <!-- Track line -->
+          <path class="track-line" d="
+            M 60,208
+            C 48,208 38,214 36,225
+            C 34,238 40,250 53,255
+            C 66,260 80,254 86,242
+            C 92,230 90,216 96,202
+            C 106,180 122,158 145,138
+            C 175,112 210,86 248,64
+            C 270,50 294,34 318,24
+            C 340,15 364,16 380,30
+            C 395,44 398,62 390,80
+            C 380,98 368,112 368,128
+            C 370,144 382,156 396,166
+            C 415,180 440,192 462,202
+            C 478,210 492,218 500,230
+            C 508,244 506,260 496,270
+            C 484,280 468,280 455,272
+            C 440,264 422,256 402,252
+            C 378,248 354,248 334,252
+            C 316,256 303,264 296,278
+            C 288,292 286,308 293,322
+            C 302,338 315,352 318,368
+            C 319,382 312,394 298,399
+            C 282,406 262,406 248,399
+            C 232,390 224,375 228,360
+            C 232,344 240,330 234,318
+            C 226,304 212,298 196,300
+            C 178,302 164,313 154,327
+            C 144,342 146,358 158,368
+            C 172,378 188,376 198,364
+            C 210,350 214,334 210,318
+            C 206,300 198,288 192,276
+            C 186,262 181,250 176,238
+            C 172,226 166,214 160,208
+            Z"/>
+          <!-- Start/Finish line (on main straight, centre) -->
+          <rect class="track-sf" x="282" y="202" width="5" height="12" rx="1"/>
         </svg>
       </div>
     </div>
