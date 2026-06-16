@@ -116,15 +116,19 @@
   }
   #live-dot .live-label { font-family: var(--mono); font-size: 10px; color: var(--red); letter-spacing: 2px; }
 
-  #sound-btn {
+  #video-overlay-btns {
     position: absolute; top: 12px; left: 14px; z-index: 4;
+    display: flex; gap: 6px; pointer-events: auto;
+  }
+  #sound-btn, #fullscreen-btn {
     font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
     padding: 5px 10px; border-radius: 2px; border: 1.5px solid var(--dim);
-    background: rgba(0,0,0,0.5); color: var(--dim); cursor: pointer; pointer-events: auto;
+    background: rgba(0,0,0,0.5); color: var(--dim); cursor: pointer;
     transition: all .15s;
   }
-  #sound-btn:hover { border-color: var(--text); color: var(--text); }
+  #sound-btn:hover, #fullscreen-btn:hover { border-color: var(--text); color: var(--text); }
   #sound-btn.on { border-color: var(--green); color: var(--green); }
+  #fullscreen-btn.on { border-color: var(--blue); color: var(--blue); }
 
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
@@ -283,7 +287,10 @@
       <div class="dot"></div>
       <span class="live-label">LIVE</span>
     </div>
-    <button id="sound-btn" onclick="toggleSound()">🔇 SOUND OFF</button>
+    <div id="video-overlay-btns">
+      <button id="sound-btn" onclick="toggleSound()">🔇 SOUND OFF</button>
+      <button id="fullscreen-btn" onclick="toggleFullscreen()">⛶ FULLSCREEN</button>
+    </div>
   </div>
 
   <div id="sidebar">
@@ -682,6 +689,30 @@ function updateRecordTimer() {
 function formatFileTimestamp(d) {
   return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
 }
+
+function toggleFullscreen() {
+  const panel = document.getElementById('video-panel');
+  const btn = document.getElementById('fullscreen-btn');
+  if (!document.fullscreenElement) {
+    panel.requestFullscreen().then(() => {
+      btn.textContent = '✕ EXIT FULL';
+      btn.classList.add('on');
+    }).catch(() => {});
+  } else {
+    document.exitFullscreen().then(() => {
+      btn.textContent = '⛶ FULLSCREEN';
+      btn.classList.remove('on');
+    }).catch(() => {});
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) {
+    const btn = document.getElementById('fullscreen-btn');
+    btn.textContent = '⛶ FULLSCREEN';
+    btn.classList.remove('on');
+  }
+});
 
 function setFlag(btn) {
   document.querySelectorAll('.flag-btn').forEach(b => b.classList.remove('active'));
