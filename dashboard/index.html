@@ -130,6 +130,40 @@
   #sound-btn.on { border-color: var(--green); color: var(--green); }
   #fullscreen-btn.on { border-color: var(--blue); color: var(--blue); }
 
+  #fs-overlay {
+    position: absolute; inset: 0; z-index: 5; pointer-events: none; display: none;
+  }
+  #video-panel:fullscreen #fs-overlay,
+  #video-panel:-webkit-full-screen #fs-overlay { display: block; }
+
+  #fs-driver-badge {
+    position: absolute; bottom: 28px; left: 28px;
+    background: rgba(0,0,0,0.65); border-left: 4px solid var(--red);
+    padding: 10px 20px; backdrop-filter: blur(4px);
+  }
+  #fs-driver-label {
+    font-family: var(--mono); font-size: 10px; color: var(--label);
+    letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px;
+  }
+  #fs-driver-name {
+    font-family: var(--display); font-weight: 700; font-size: 36px;
+    color: #fff; letter-spacing: 3px;
+  }
+
+  #fs-track-wrap {
+    position: absolute; bottom: 28px; right: 28px;
+    background: rgba(0,0,0,0.65); border: 1px solid rgba(255,255,255,0.1);
+    padding: 12px 14px; backdrop-filter: blur(4px);
+  }
+  #fs-track-label {
+    font-family: var(--mono); font-size: 8px; color: var(--label);
+    letter-spacing: 2px; text-align: center; margin-bottom: 8px; text-transform: uppercase;
+  }
+  #fs-track-svg { width: 155px; height: 130px; display: block; }
+  .track-glow { fill: none; stroke: rgba(0,232,122,0.18); stroke-width: 9; stroke-linejoin: round; stroke-linecap: round; }
+  .track-line { fill: none; stroke: #00e87a; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+  .track-sf   { fill: var(--red); }
+
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
   #sidebar {
@@ -286,6 +320,22 @@
     <div id="live-dot">
       <div class="dot"></div>
       <span class="live-label">LIVE</span>
+    </div>
+    <div id="fs-overlay">
+      <div id="fs-driver-badge">
+        <div id="fs-driver-label">DRIVER</div>
+        <div id="fs-driver-name">SHAWN SEELAN</div>
+      </div>
+      <div id="fs-track-wrap">
+        <div id="fs-track-label">Sepang International Circuit</div>
+        <svg id="fs-track-svg" viewBox="0 0 185 162" xmlns="http://www.w3.org/2000/svg">
+          <!-- Sepang International Circuit — approximate layout, clockwise -->
+          <path class="track-glow" d="M 148,22 C 158,22 165,32 162,46 L 160,68 C 158,83 148,91 135,89 L 112,87 C 98,85 90,75 90,61 L 90,47 C 90,33 80,25 66,27 L 48,31 C 34,35 26,47 26,61 L 26,83 C 26,97 36,105 50,103 L 68,101 C 82,99 90,111 88,125 L 86,137 C 84,147 74,151 62,149 L 40,147 C 28,145 20,135 20,123 L 20,51 C 20,37 30,27 44,25 L 100,21 C 118,19 136,19 148,22 Z"/>
+          <path class="track-line"  d="M 148,22 C 158,22 165,32 162,46 L 160,68 C 158,83 148,91 135,89 L 112,87 C 98,85 90,75 90,61 L 90,47 C 90,33 80,25 66,27 L 48,31 C 34,35 26,47 26,61 L 26,83 C 26,97 36,105 50,103 L 68,101 C 82,99 90,111 88,125 L 86,137 C 84,147 74,151 62,149 L 40,147 C 28,145 20,135 20,123 L 20,51 C 20,37 30,27 44,25 L 100,21 C 118,19 136,19 148,22 Z"/>
+          <!-- Start/Finish line -->
+          <rect class="track-sf" x="144" y="55" width="10" height="3" rx="1"/>
+        </svg>
+      </div>
     </div>
     <div id="video-overlay-btns">
       <button id="sound-btn" onclick="toggleSound()">🔇 SOUND OFF</button>
@@ -697,6 +747,7 @@ function toggleFullscreen() {
     panel.requestFullscreen().then(() => {
       btn.textContent = '✕ EXIT FULL';
       btn.classList.add('on');
+      updateFsDriver();
     }).catch(() => {});
   } else {
     document.exitFullscreen().then(() => {
@@ -704,6 +755,10 @@ function toggleFullscreen() {
       btn.classList.remove('on');
     }).catch(() => {});
   }
+}
+
+function updateFsDriver() {
+  document.getElementById('fs-driver-name').textContent = DRIVERS[state.driverIdx];
 }
 
 document.addEventListener('fullscreenchange', () => {
@@ -725,6 +780,7 @@ function cycleDriver() {
   state.driverIdx = (state.driverIdx + 1) % DRIVERS.length;
   const name = DRIVERS[state.driverIdx];
   document.getElementById('driver-name').textContent = name;
+  updateFsDriver();
   startStintTimer();
   logEvent('Driver: ' + name, 'highlight');
 }
