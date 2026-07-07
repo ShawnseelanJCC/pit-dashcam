@@ -69,45 +69,6 @@
   .top-stat .value.big { font-size: 20px; color: var(--green); }
 
   .flag-btns { display: flex; gap: 5px; margin-left: auto; }
-
-  #timing-btn {
-    font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
-    padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--blue);
-    background: transparent; color: var(--blue); cursor: pointer; transition: all .15s;
-  }
-  #timing-btn:hover { background: var(--blue); color: #000; }
-
-  #timing-modal {
-    display: none; position: fixed; inset: 0; z-index: 20;
-    background: rgba(0,0,0,0.75); align-items: center; justify-content: center;
-  }
-  #timing-modal.open { display: flex; }
-  #timing-modal-box {
-    width: 90vw; height: 85vh; background: var(--surface);
-    border: 1px solid var(--border); border-top: 2px solid var(--blue);
-    display: flex; flex-direction: column; overflow: hidden;
-  }
-  #timing-modal-header {
-    display: flex; align-items: center; gap: 12px;
-    padding: 8px 12px; border-bottom: 1px solid var(--border);
-  }
-  #timing-modal-title {
-    font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
-    color: var(--label); text-transform: uppercase;
-  }
-  #timing-modal-link {
-    font-family: var(--mono); font-size: 11px; color: var(--blue);
-    text-decoration: none; letter-spacing: 1px;
-  }
-  #timing-modal-link:hover { color: var(--text); }
-  #timing-modal-close {
-    margin-left: auto; font-family: var(--display); font-weight: 700; font-size: 12px;
-    letter-spacing: 1px; padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--red);
-    background: transparent; color: var(--red); cursor: pointer;
-  }
-  #timing-modal-close:hover { background: var(--red); color: #fff; }
-  #timing-modal-body { flex: 1; position: relative; }
-  #timing-iframe { width: 100%; height: 100%; border: 0; background: #fff; }
   .flag-btn {
     font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
     padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--dim);
@@ -321,25 +282,11 @@
     <span class="label">Best Lap</span>
     <span class="value" id="best-lap">--:--</span>
   </div>
-  <button id="timing-btn" onclick="toggleTimingModal()">📊 LIVE TIMING</button>
   <div class="flag-btns">
     <button class="flag-btn green  active" data-flag="GREEN"  onclick="setFlag(this)">GREEN</button>
     <button class="flag-btn yellow"        data-flag="YELLOW" onclick="setFlag(this)">YELLOW</button>
     <button class="flag-btn sc"            data-flag="SC"     onclick="setFlag(this)">SC</button>
     <button class="flag-btn red-f"         data-flag="RED"    onclick="setFlag(this)">RED</button>
-  </div>
-</div>
-
-<div id="timing-modal">
-  <div id="timing-modal-box">
-    <div id="timing-modal-header">
-      <span id="timing-modal-title">Sepang Live Timing</span>
-      <a id="timing-modal-link" href="#" target="_blank" rel="noopener">Open in new tab ↗</a>
-      <button id="timing-modal-close" onclick="toggleTimingModal(false)">✕ CLOSE</button>
-    </div>
-    <div id="timing-modal-body">
-      <iframe id="timing-iframe" title="Sepang Live Timing" referrerpolicy="no-referrer"></iframe>
-    </div>
   </div>
 </div>
 
@@ -452,7 +399,6 @@ const LAPS_PER_FUEL    = 12;
 const FUEL_DECREMENT   = 100 / LAPS_PER_FUEL;
 const DRIVERS          = ['SHAWN SEELAN', 'NATASHA SEATTER', 'JAY WONG'];
 const DEFAULT_STREAM_URL = 'http://104.248.151.105:8080/live/jrt.m3u8';
-const LIVE_TIMING_URL  = 'https://live.timing.asia/sepang';
 
 const state = {
   connected: false, raceStarted: false, raceStartTime: null, raceTimerHandle: null,
@@ -768,20 +714,6 @@ function updateRecordTimer() {
 
 function formatFileTimestamp(d) {
   return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
-}
-
-function toggleTimingModal(open) {
-  const modal = document.getElementById('timing-modal');
-  const shouldOpen = open === undefined ? !modal.classList.contains('open') : open;
-  if (shouldOpen) {
-    const iframe = document.getElementById('timing-iframe');
-    if (!iframe.src) iframe.src = LIVE_TIMING_URL;
-    document.getElementById('timing-modal-link').href = LIVE_TIMING_URL;
-    modal.classList.add('open');
-    logEvent('Live timing opened', '');
-  } else {
-    modal.classList.remove('open');
-  }
 }
 
 function toggleFullscreen() {
