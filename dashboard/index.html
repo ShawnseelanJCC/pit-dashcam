@@ -245,12 +245,16 @@
   #driver-name { font-family: var(--display); font-weight: 700; font-size: 16px; color: var(--blue); cursor: pointer; letter-spacing: 1px; }
   #driver-name:hover { color: var(--text); }
 
-  #fuel-section { min-width: 160px; }
+  #fuel-section { min-width: 220px; }
   .fuel-bar-wrap { height: 8px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 4px 0; }
   #fuel-bar { height: 100%; width: 100%; background: var(--green); transition: width .4s, background .4s; border-radius: 2px; }
   .fuel-controls { display: flex; gap: 4px; align-items: center; }
-  .fuel-val { font-family: var(--mono); font-size: 18px; color: var(--text); min-width: 44px; }
+  .fuel-val { font-family: var(--mono); font-size: 15px; color: var(--text); min-width: 80px; }
   .fuel-val.critical { color: var(--red); animation: pulse 1s infinite; }
+  .fuel-setup { display: flex; gap: 10px; align-items: center; margin-bottom: 2px; }
+  .fuel-setup-item { display: flex; align-items: center; gap: 3px; }
+  .fuel-setup-label { font-family: var(--mono); font-size: 8px; color: var(--label); letter-spacing: 1px; text-transform: uppercase; margin-right: 2px; }
+  .fuel-setup-val { font-family: var(--mono); font-size: 12px; color: var(--text); min-width: 36px; text-align: center; }
   .fuel-btn { font-family: var(--mono); font-size: 13px; padding: 2px 6px; border: 1px solid var(--border); background: transparent; color: var(--label); cursor: pointer; border-radius: 2px; }
   .fuel-btn:hover { border-color: var(--text); color: var(--text); }
   #refuel-btn { font-family: var(--display); font-weight: 700; font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border: 1px solid var(--green); background: transparent; color: var(--green); cursor: pointer; border-radius: 2px; }
@@ -405,10 +409,22 @@
   </div>
   <div class="bb-section" id="fuel-section">
     <div class="bb-label">Fuel</div>
+    <div class="fuel-setup">
+      <div class="fuel-setup-item">
+        <span class="fuel-setup-label">Tank</span>
+        <button class="fuel-btn" onclick="adjustTank(-5)">−</button>
+        <span class="fuel-setup-val" id="tank-size-val">45L</span>
+        <button class="fuel-btn" onclick="adjustTank(5)">+</button>
+      </div>
+      <div class="fuel-setup-item">
+        <span class="fuel-setup-label">L/Lap</span>
+        <button class="fuel-btn" onclick="adjustLPerLap(-0.5)">−</button>
+        <span class="fuel-setup-val" id="l-per-lap-val">3.0L</span>
+        <button class="fuel-btn" onclick="adjustLPerLap(0.5)">+</button>
+      </div>
+    </div>
     <div class="fuel-controls">
-      <div class="fuel-val" id="fuel-pct">100%</div>
-      <button class="fuel-btn" onclick="addFuel(-5)">-5</button>
-      <button class="fuel-btn" onclick="addFuel(5)">+5</button>
+      <div class="fuel-val" id="fuel-pct">45L (100%)</div>
       <button id="refuel-btn" onclick="refuel()">REFUEL</button>
     </div>
     <div class="fuel-bar-wrap"><div id="fuel-bar"></div></div>
@@ -433,15 +449,14 @@
 </div>
 
 <script>
-const LAPS_PER_FUEL    = 12;
-const FUEL_DECREMENT   = 100 / LAPS_PER_FUEL;
-const DRIVERS          = ['SHAWN SEELAN', 'NATASHA SEATTER', 'JAY WONG'];
+const DRIVERS = ['SHAWN SEELAN', 'NATASHA SEATTER', 'JAY WONG'];
 const DEFAULT_STREAM_URL = 'http://104.248.151.105:8080/live/jrt.m3u8';
 
 const state = {
   connected: false, raceStarted: false, raceStartTime: null, raceTimerHandle: null,
   lapCount: 0, lapTimes: [], bestLapMs: null, lapStartTime: null,
-  fuelLevel: 100, driverIdx: 0, stintStartTime: null, stintHandle: null,
+  tankSize: 45, lPerLap: 3.0, fuelLitres: 45,
+  driverIdx: 0, stintStartTime: null, stintHandle: null,
   eventLog: [], hls: null, statsHandle: null, fuelWarned: false,
   recording: false, recorder: null, recordChunks: [], recordStartTime: null, recordHandle: null,
 };
@@ -582,7 +597,7 @@ function recordLap() {
   document.getElementById('lap-count').textContent = state.lapCount;
   document.getElementById('last-lap').textContent  = durationStr;
   state.lapTimes.unshift({ lap: state.lapCount, time: formatWallTime(now), duration: durationStr, delta });
-  state.fuelLevel = Math.max(0, state.fuelLevel - FUEL_DECREMENT);
+  state.fuelLitres = Math.max(0, state.fuelLitres - state.lPerLap);
   updateFuelDisplay();
   renderLapLog();
   logEvent('Lap ' + state.lapCount + ' — ' + durationStr + (delta ? ' (' + delta + ')' : ''), delta === 'BEST' ? 'highlight' : '');
@@ -595,25 +610,32 @@ function renderLapLog() {
   }).join('');
 }
 
-function addFuel(delta) {
-  state.fuelLevel = Math.min(100, Math.max(0, state.fuelLevel + delta));
+function adjustTank(delta) {
+  state.tankSize = Math.min(90, Math.max(25, state.tankSize + delta));
+  if (state.fuelLitres > state.tankSize) state.fuelLitres = state.tankSize;
+  document.getElementById('tank-size-val').textContent = state.tankSize + 'L';
   updateFuelDisplay();
 }
 
+function adjustLPerLap(delta) {
+  state.lPerLap = Math.min(10, Math.max(0.5, Math.round((state.lPerLap + delta) * 10) / 10));
+  document.getElementById('l-per-lap-val').textContent = state.lPerLap.toFixed(1) + 'L';
+}
+
 function refuel() {
-  state.fuelLevel = 100; state.fuelWarned = false;
-  updateFuelDisplay(); logEvent('Refuel — tank full', 'highlight');
+  state.fuelLitres = state.tankSize; state.fuelWarned = false;
+  updateFuelDisplay(); logEvent('Refuel — ' + state.tankSize + 'L', 'highlight');
 }
 
 function updateFuelDisplay() {
-  const pct = state.fuelLevel;
+  const pct = state.tankSize > 0 ? (state.fuelLitres / state.tankSize) * 100 : 0;
   const pctEl = document.getElementById('fuel-pct');
   const barEl = document.getElementById('fuel-bar');
-  pctEl.textContent = Math.round(pct) + '%';
+  pctEl.textContent = state.fuelLitres.toFixed(1) + 'L (' + Math.round(pct) + '%)';
   barEl.style.width = pct + '%';
   if (pct <= 15) {
     barEl.style.background = 'var(--red)'; pctEl.classList.add('critical');
-    if (!state.fuelWarned) { state.fuelWarned = true; logEvent('FUEL CRITICAL — ' + Math.round(pct) + '% — BOX BOX', 'warn'); }
+    if (!state.fuelWarned) { state.fuelWarned = true; logEvent('FUEL CRITICAL — ' + state.fuelLitres.toFixed(1) + 'L — BOX BOX', 'warn'); }
   } else if (pct <= 30) {
     barEl.style.background = 'var(--amber)'; pctEl.classList.remove('critical'); state.fuelWarned = false;
   } else {
@@ -706,7 +728,7 @@ function drawRecordingOverlay(ctx, w, h) {
   const lastLap   = document.getElementById('last-lap').textContent;
   const bestLap   = document.getElementById('best-lap').textContent;
   const driver    = document.getElementById('driver-name').textContent;
-  const fuel      = document.getElementById('fuel-pct').textContent;
+  const fuel      = state.fuelLitres.toFixed(1) + 'L';
   const flagBtn   = document.querySelector('.flag-btn.active');
   const flag      = flagBtn ? flagBtn.dataset.flag : '';
 
