@@ -261,6 +261,9 @@
   .fuel-setup-item { display: flex; align-items: center; gap: 3px; }
   .fuel-setup-label { font-family: var(--mono); font-size: 10px; color: var(--label); letter-spacing: 1px; text-transform: uppercase; margin-right: 2px; }
   .fuel-setup-val { font-family: var(--mono); font-size: 13px; color: var(--text); min-width: 36px; text-align: center; }
+  .fuel-setup-input { font-family: var(--mono); font-size: 13px; color: var(--text); background: #0d0d0d; border: 1px solid var(--border); border-radius: 2px; width: 48px; text-align: center; padding: 1px 3px; -moz-appearance: textfield; }
+  .fuel-setup-input::-webkit-inner-spin-button, .fuel-setup-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .fuel-setup-input:focus { outline: none; border-color: var(--amber); }
   .fuel-btn { font-family: var(--mono); font-size: 13px; padding: 2px 6px; border: 1px solid var(--border); background: transparent; color: var(--label); cursor: pointer; border-radius: 2px; }
   .fuel-btn:hover { border-color: var(--text); color: var(--text); }
   #refuel-btn { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 1px; padding: 2px 8px; border: 1px solid var(--green); background: transparent; color: var(--green); cursor: pointer; border-radius: 2px; }
@@ -418,15 +421,15 @@
     <div class="fuel-setup">
       <div class="fuel-setup-item">
         <span class="fuel-setup-label">Tank</span>
-        <button class="fuel-btn" onclick="adjustTank(-5)">−</button>
-        <span class="fuel-setup-val" id="tank-size-val">45L</span>
-        <button class="fuel-btn" onclick="adjustTank(5)">+</button>
+        <button class="fuel-btn" onclick="adjustTank(-1)">−</button>
+        <input class="fuel-setup-input" id="tank-size-val" type="number" value="45" min="1" max="200" onchange="setTank(this.value)">
+        <button class="fuel-btn" onclick="adjustTank(1)">+</button>
       </div>
       <div class="fuel-setup-item">
         <span class="fuel-setup-label">L/Lap</span>
-        <button class="fuel-btn" onclick="adjustLPerLap(-0.5)">−</button>
-        <span class="fuel-setup-val" id="l-per-lap-val">3.0L</span>
-        <button class="fuel-btn" onclick="adjustLPerLap(0.5)">+</button>
+        <button class="fuel-btn" onclick="adjustLPerLap(-0.1)">−</button>
+        <input class="fuel-setup-input" id="l-per-lap-val" type="number" value="3.0" min="0.1" max="50" step="0.1" onchange="setLPerLap(this.value)">
+        <button class="fuel-btn" onclick="adjustLPerLap(0.1)">+</button>
       </div>
     </div>
     <div class="fuel-controls">
@@ -617,15 +620,31 @@ function renderLapLog() {
 }
 
 function adjustTank(delta) {
-  state.tankSize = Math.min(90, Math.max(25, state.tankSize + delta));
+  state.tankSize = Math.max(1, Math.round((state.tankSize + delta) * 10) / 10);
   if (state.fuelLitres > state.tankSize) state.fuelLitres = state.tankSize;
-  document.getElementById('tank-size-val').textContent = state.tankSize + 'L';
+  document.getElementById('tank-size-val').value = state.tankSize;
+  updateFuelDisplay();
+}
+
+function setTank(val) {
+  const v = parseFloat(val);
+  if (isNaN(v) || v <= 0) return;
+  state.tankSize = Math.round(v * 10) / 10;
+  if (state.fuelLitres > state.tankSize) state.fuelLitres = state.tankSize;
+  document.getElementById('tank-size-val').value = state.tankSize;
   updateFuelDisplay();
 }
 
 function adjustLPerLap(delta) {
-  state.lPerLap = Math.min(10, Math.max(0.5, Math.round((state.lPerLap + delta) * 10) / 10));
-  document.getElementById('l-per-lap-val').textContent = state.lPerLap.toFixed(1) + 'L';
+  state.lPerLap = Math.max(0.1, Math.round((state.lPerLap + delta) * 10) / 10);
+  document.getElementById('l-per-lap-val').value = state.lPerLap.toFixed(1);
+}
+
+function setLPerLap(val) {
+  const v = parseFloat(val);
+  if (isNaN(v) || v <= 0) return;
+  state.lPerLap = Math.round(v * 10) / 10;
+  document.getElementById('l-per-lap-val').value = state.lPerLap.toFixed(1);
 }
 
 function refuel() {
