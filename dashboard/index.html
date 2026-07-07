@@ -69,6 +69,13 @@
   .top-stat .value.big { font-size: 20px; color: var(--green); }
 
   .flag-btns { display: flex; gap: 5px; margin-left: auto; }
+  #timing-btn {
+    font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--blue);
+    background: transparent; color: var(--blue); cursor: pointer; transition: all .15s; margin-left: 10px;
+  }
+  #timing-btn:hover { background: var(--blue); color: #000; }
+  #timing-btn.active { background: var(--blue); color: #000; }
   .flag-btn {
     font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
     padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--dim);
@@ -84,6 +91,22 @@
   .flag-btn.active.red-f  { background: var(--red);    color: #fff; }
 
   #middle { grid-area: middle; display: flex; overflow: hidden; }
+
+  #timing-panel {
+    width: 0; min-width: 0; overflow: hidden;
+    background: var(--surface); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; transition: width .25s ease;
+  }
+  #timing-panel.open { width: 520px; min-width: 520px; }
+  #timing-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #timing-header .t-title { font-family: var(--mono); font-size: 10px; color: var(--label); letter-spacing: 2px; text-transform: uppercase; }
+  #timing-header .t-url   { font-family: var(--mono); font-size: 9px; color: #333; }
+  #timing-refresh { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border: 1px solid var(--border); background: transparent; color: var(--label); cursor: pointer; border-radius: 2px; }
+  #timing-refresh:hover { border-color: var(--text); color: var(--text); }
+  #timing-iframe { flex: 1; border: none; width: 100%; background: #fff; display: block; }
 
   #video-panel {
     flex: 3; position: relative; background: #000;
@@ -289,6 +312,7 @@
     <button class="flag-btn sc"            data-flag="SC"     onclick="setFlag(this)">SC</button>
     <button class="flag-btn red-f"         data-flag="RED"    onclick="setFlag(this)">RED</button>
   </div>
+  <button id="timing-btn" onclick="toggleTiming()">⏱ LIVE TIMING</button>
 </div>
 
 <div id="middle">
@@ -346,6 +370,17 @@
         <tbody id="lap-log-body"></tbody>
       </table>
     </div>
+  </div>
+
+  <div id="timing-panel">
+    <div id="timing-header">
+      <div>
+        <div class="t-title">⏱ Live Timing — Sepang</div>
+        <div class="t-url">live.timing.asia/sepang</div>
+      </div>
+      <button id="timing-refresh" onclick="reloadTiming()" title="Force refresh">↺ REFRESH</button>
+    </div>
+    <iframe id="timing-iframe" src="about:blank" allowfullscreen></iframe>
   </div>
 </div>
 
@@ -794,6 +829,36 @@ function formatWallTime(ts) {
   return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
 function pad(n) { return String(n).padStart(2, '0'); }
+
+const TIMING_URL = 'https://live.timing.asia/sepang';
+let timingOpen = false;
+let timingRefreshHandle = null;
+
+function toggleTiming() {
+  timingOpen = !timingOpen;
+  const panel = document.getElementById('timing-panel');
+  const btn   = document.getElementById('timing-btn');
+  const iframe = document.getElementById('timing-iframe');
+  if (timingOpen) {
+    panel.classList.add('open');
+    btn.classList.add('active');
+    btn.textContent = '✕ TIMING';
+    iframe.src = TIMING_URL;
+    timingRefreshHandle = setInterval(reloadTiming, 45000);
+    logEvent('Live timing panel opened', 'highlight');
+  } else {
+    panel.classList.remove('open');
+    btn.classList.remove('active');
+    btn.textContent = '⏱ LIVE TIMING';
+    iframe.src = 'about:blank';
+    clearInterval(timingRefreshHandle);
+  }
+}
+
+function reloadTiming() {
+  const iframe = document.getElementById('timing-iframe');
+  if (timingOpen) iframe.src = TIMING_URL + '?_t=' + Date.now();
+}
 </script>
 </body>
 </html>
