@@ -48,6 +48,8 @@
     align-items: center;
     padding: 0 12px;
     gap: 16px;
+    overflow: visible;
+    flex-wrap: nowrap;
   }
 
   .logo {
@@ -68,7 +70,7 @@
   .top-stat .value { font-family: var(--mono); font-size: 17px; color: var(--text); line-height: 1; }
   .top-stat .value.big { font-size: 20px; color: var(--green); }
 
-  .flag-btns { display: flex; gap: 5px; margin-left: auto; }
+  .flag-btns { display: flex; gap: 5px; margin-left: auto; align-items: center; }
   #timing-btn {
     font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
     padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--blue);
@@ -311,8 +313,8 @@
     <button class="flag-btn yellow"        data-flag="YELLOW" onclick="setFlag(this)">YELLOW</button>
     <button class="flag-btn sc"            data-flag="SC"     onclick="setFlag(this)">SC</button>
     <button class="flag-btn red-f"         data-flag="RED"    onclick="setFlag(this)">RED</button>
+    <button id="timing-btn" onclick="toggleTiming()">⏱ LIVE TIMING</button>
   </div>
-  <button id="timing-btn" onclick="toggleTiming()">⏱ LIVE TIMING</button>
 </div>
 
 <div id="middle">
