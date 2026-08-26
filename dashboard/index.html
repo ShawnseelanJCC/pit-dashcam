@@ -161,6 +161,13 @@
   #sound-btn.on { border-color: var(--green); color: var(--green); }
   #fullscreen-btn.on { border-color: var(--blue); color: var(--blue); }
 
+  #video-watermark {
+    position: absolute; bottom: 14px; right: 14px; z-index: 4;
+    font-family: var(--mono); font-size: 13px; letter-spacing: 2px;
+    color: #ffffff; opacity: 0.5; pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+
   #fs-overlay {
     position: absolute; inset: 0; z-index: 5; pointer-events: none; display: none;
   }
@@ -343,6 +350,7 @@
       <div class="hud-corner hud-bl"></div>
       <div class="hud-corner hud-br"></div>
     </div>
+    <div id="video-watermark">POWERED BY JRT</div>
     <div id="live-dot">
       <div class="dot"></div>
       <span class="live-label">LIVE</span>
@@ -769,6 +777,19 @@ function drawRecordingOverlay(ctx, w, h) {
   ctx.beginPath();
   ctx.arc(w - 22, 22, Math.max(5, w * 0.006), 0, Math.PI * 2);
   ctx.fill();
+
+  const wmSize = Math.round(h * 0.022);
+  ctx.font = '600 ' + wmSize + 'px "Share Tech Mono", monospace';
+  ctx.textBaseline = 'bottom';
+  ctx.textAlign = 'right';
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 4;
+  ctx.fillText('POWERED BY JRT', w - 14, h - barH - 10);
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
 }
 
 function stopRecording() {
