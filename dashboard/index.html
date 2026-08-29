@@ -515,11 +515,8 @@
     <div class="bb-value" id="signal-label" style="font-size:10px;color:var(--label)">GOOD</div>
   </div>
   <div class="bb-section" id="stint-section">
-    <div class="bb-label">Driver / Stint</div>
-    <div style="display:flex;gap:4px;align-items:center;">
-      <select id="driver-select" onchange="selectDriver(this.value)"></select>
-      <button id="driver-edit-btn" onclick="openDriverModal()">EDIT</button>
-    </div>
+    <div class="bb-label" onclick="openDriverModal()" style="cursor:pointer;text-decoration:underline dotted;" title="Click to manage drivers">Driver / Stint</div>
+    <select id="driver-select" onchange="selectDriver(this.value)" ondblclick="openDriverModal()" title="Double-click to manage drivers"></select>
     <div class="bb-value" id="stint-timer">00:00:00</div>
   </div>
   <div class="bb-section" id="fuel-section">
@@ -1016,12 +1013,25 @@ function closeDriverModal() {
 function renderDriverModalList() {
   const list = document.getElementById('driver-modal-list');
   list.innerHTML = DRIVERS.map((d, i) =>
-    `<div style="display:flex;align-items:center;gap:8px;padding:4px 6px;background:#111;border-radius:3px;border:1px solid ${i===state.driverIdx?'var(--blue)':'#2a2a2a'};">
-      <span style="flex:1;font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:1px;color:${i===state.driverIdx?'var(--blue)':'var(--text)'};">${d}</span>
-      <button onclick="selectDriverModal(${i})" style="font-size:10px;padding:2px 7px;border:1px solid var(--blue);background:${i===state.driverIdx?'var(--blue)':'transparent'};color:${i===state.driverIdx?'#000':'var(--blue)'};cursor:pointer;border-radius:2px;font-family:var(--display);font-weight:700;">SET</button>
-      <button onclick="deleteDriverModal(${i})" style="font-size:10px;padding:2px 7px;border:1px solid var(--red);background:transparent;color:var(--red);cursor:pointer;border-radius:2px;">✕</button>
+    `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:#111;border-radius:3px;border:1px solid ${i===state.driverIdx?'var(--blue)':'#2a2a2a'};">
+      <input value="${d}" id="driver-name-inp-${i}"
+        style="flex:1;font-family:var(--display);font-size:12px;font-weight:700;letter-spacing:1px;color:${i===state.driverIdx?'var(--blue)':'var(--text)'};background:transparent;border:none;outline:none;min-width:0;"
+        onchange="renameDriver(${i},this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+      <button onclick="selectDriverModal(${i})" style="font-size:10px;padding:2px 6px;border:1px solid var(--blue);background:${i===state.driverIdx?'var(--blue)':'transparent'};color:${i===state.driverIdx?'#000':'var(--blue)'};cursor:pointer;border-radius:2px;font-family:var(--display);font-weight:700;white-space:nowrap;">SET</button>
+      <button onclick="deleteDriverModal(${i})" style="font-size:10px;padding:2px 6px;border:1px solid var(--red);background:transparent;color:var(--red);cursor:pointer;border-radius:2px;">✕</button>
     </div>`
   ).join('');
+}
+
+function renameDriver(idx, newName) {
+  newName = newName.trim().toUpperCase();
+  if (!newName) { renderDriverModalList(); return; }
+  const old = DRIVERS[idx];
+  DRIVERS[idx] = newName;
+  rebuildDriverSelect();
+  updateFsDriver();
+  logEvent('Renamed ' + old + ' → ' + newName, '');
+  renderDriverModalList();
 }
 
 function selectDriverModal(idx) {
