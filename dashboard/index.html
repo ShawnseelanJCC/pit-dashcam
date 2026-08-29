@@ -229,6 +229,25 @@
   #lap-log-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11px; }
   #lap-log-table th { color: var(--label); font-size: 9px; letter-spacing: 1px; text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--border); }
   #lap-log-table td { padding: 3px 4px; border-bottom: 1px solid #151515; color: var(--text); }
+
+  #timing-car-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+  #timing-car-input {
+    flex: 1; background: var(--surface); border: 1.5px solid var(--border); color: var(--text);
+    font-family: var(--mono); font-size: 13px; padding: 5px 8px; border-radius: 2px;
+    text-transform: uppercase; width: 0;
+  }
+  #timing-car-input:focus { outline: none; border-color: var(--blue); }
+  #timing-car-btn {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 1px; padding: 5px 10px;
+    border: 1.5px solid var(--blue); color: var(--blue); background: transparent;
+    cursor: pointer; border-radius: 2px; white-space: nowrap;
+  }
+  #timing-car-btn:hover { background: var(--blue); color: #000; }
+  #timing-status-row { font-family: var(--mono); font-size: 10px; color: var(--label); margin-bottom: 6px; }
+  #timing-status-row .ts-on  { color: var(--green); }
+  #timing-status-row .ts-off { color: var(--dim); }
+  .lt-row { background: rgba(0,170,255,0.04); }
+  .lt-row td:first-child::after { content: ' ↙'; color: var(--blue); font-size: 9px; }
   #lap-log-table tr:first-child td { color: var(--green); }
   .delta-pos { color: var(--red); }
   .delta-neg { color: var(--green); }
@@ -388,6 +407,12 @@
     </div>
     <div class="sb-section" style="flex:1; overflow-y:auto;">
       <div class="sb-title">Lap Log</div>
+      <div id="timing-car-row">
+        <input id="timing-car-input" type="text" placeholder="Car NR e.g. 512" maxlength="6"
+               onkeydown="if(event.key==='Enter') toggleTimingFeed()">
+        <button id="timing-car-btn" onclick="toggleTimingFeed()">SYNC</button>
+      </div>
+      <div id="timing-status-row"><span class="ts-off">⬤</span> Live timing — <span id="timing-status-text">off</span></div>
       <table id="lap-log-table">
         <thead><tr><th>LAP</th><th>TIME</th><th>DURATION</th><th>DELTA</th></tr></thead>
         <tbody id="lap-log-body"></tbody>
@@ -928,6 +953,122 @@ function toggleTiming() {
 function reloadTiming() {
   const iframe = document.getElementById('timing-iframe');
   if (timingOpen) iframe.src = TIMING_URL + '?_t=' + Date.now();
+}
+
+// ─── Live Timing Integration (live.timing.asia via local proxy) ──────────────
+
+const TIMING_PROXY = window.location.origin + '/timing';
+
+const timingState = {
+  active:       false,
+  carNumber:    '',
+  pollHandle:   null,
+  knownLaps:    new Set(),   // lap numbers already added to log
+};
+
+function toggleTimingFeed() {
+  if (timingState.active) {
+    stopTimingFeed();
+  } else {
+    startTimingFeed();
+  }
+}
+
+function startTimingFeed() {
+  const car = document.getElementById('timing-car-input').value.trim().toUpperCase();
+  if (!car) {
+    logEvent('Enter a car number to sync live timing', 'warn');
+    return;
+  }
+  timingState.carNumber = car;
+  timingState.active    = true;
+  timingState.knownLaps.clear();
+
+  document.getElementById('timing-car-btn').textContent = 'STOP';
+  document.getElementById('timing-car-input').disabled  = true;
+  setTimingStatus('connecting…', false);
+  logEvent('Live timing sync started — car ' + car, '');
+
+  pollTimingProxy();
+  timingState.pollHandle = setInterval(pollTimingProxy, 5000);
+}
+
+function stopTimingFeed() {
+  timingState.active = false;
+  clearInterval(timingState.pollHandle);
+  document.getElementById('timing-car-btn').textContent = 'SYNC';
+  document.getElementById('timing-car-input').disabled  = false;
+  setTimingStatus('off', false);
+  logEvent('Live timing sync stopped', '');
+}
+
+function setTimingStatus(text, online) {
+  const dot  = document.querySelector('#timing-status-row span');
+  const span = document.getElementById('timing-status-text');
+  dot.className  = online ? 'ts-on' : 'ts-off';
+  span.textContent = text;
+}
+
+async function pollTimingProxy() {
+  if (!timingState.active) return;
+  const car = timingState.carNumber;
+  try {
+    const resp = await fetch(`${TIMING_PROXY}/car/${encodeURIComponent(car)}`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+
+    setTimingStatus(data.connected ? 'live (' + car + ')' : 'waiting for session… (' + car + ')', data.connected);
+
+    if (!data.laps || data.laps.length === 0) return;
+
+    // Laps from proxy are oldest-first. Add any we haven't seen yet.
+    let added = 0;
+    for (const lap of data.laps) {
+      const key = String(lap.lap);
+      if (timingState.knownLaps.has(key)) continue;
+      timingState.knownLaps.add(key);
+
+      injectTimingLap(lap, car);
+      added++;
+    }
+    if (added > 0) renderLapLog();
+
+  } catch (e) {
+    setTimingStatus('proxy unreachable — is it running?', false);
+  }
+}
+
+function injectTimingLap(lap, car) {
+  // Build a lap entry compatible with renderLapLog, flagged as external (lt = live timing)
+  const entry = {
+    lap:      lap.lap,
+    time:     lap.time || '—',
+    duration: lap.time || '—',   // use lap time as duration
+    delta:    lap.delta || '',
+    lt:       true,              // marks this row as from live timing
+  };
+  // Insert at correct position by lap number (ascending = state.lapTimes is newest-first)
+  // Find insertion index: lapTimes[0] is newest
+  const idx = state.lapTimes.findIndex(r => r.lap < entry.lap);
+  if (idx === -1) {
+    state.lapTimes.push(entry);
+  } else {
+    state.lapTimes.splice(idx, 0, entry);
+  }
+  logEvent('Live timing — Car ' + car + ' Lap ' + lap.lap + ': ' + (lap.time || '—') +
+           (lap.delta ? ' (' + lap.delta + ')' : '') +
+           (lap.pos ? ' P' + lap.pos : ''), lap.best ? 'highlight' : '');
+}
+
+// Patch renderLapLog to handle lt (live timing) rows differently
+const _origRenderLapLog = renderLapLog;
+// Override renderLapLog to colour live-timing rows
+function renderLapLog() {
+  document.getElementById('lap-log-body').innerHTML = state.lapTimes.map(r => {
+    const dc  = r.delta === 'BEST' ? 'delta-neg' : (r.delta || '').startsWith('+') ? 'delta-pos' : '';
+    const cls = r.lt ? ' class="lt-row"' : '';
+    return '<tr' + cls + '><td>' + r.lap + '</td><td>' + r.time + '</td><td>' + r.duration + '</td><td class="' + dc + '">' + r.delta + '</td></tr>';
+  }).join('');
 }
 </script>
 </body>

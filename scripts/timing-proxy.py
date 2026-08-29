@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""
+JRT PitCam — Live Timing Proxy
+Connects to live.timing.asia SignalR feed and exposes lap data as REST JSON.
+Runs on port 5001, nginx proxies /timing/* to it.
+"""
+
+import json
+import re
+import time
+import threading
+import logging
+from urllib.parse import quote
+from collections import deque
+
+import requests
+from flask import Flask, jsonify
+import websocket
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+log = logging.getLogger(__name__)
+
+app = Flask(__name__)
+
+BASE_URL  = 'https://live.timing.asia'
+VENUE     = 'sepang'
+HUB_PATH  = '/lt'
+TKDM      = '54561'   # Sepang venue ID — update if they change it
+
+_state = {
+    'connected':    False,
+    'laps':         {},        # 'CAR_NR' -> [lap_dict, ...]
+    'current':      {},        # 'CAR_NR' -> latest position/gap data
+    'raw_msgs':     deque(maxlen=200),
+    'last_update':  0,
+}
+_lock = threading.Lock()
+
+
+# ─── Token + negotiate ────────────────────────────────────────────────────────
+
+def fetch_token():
+    """Scrape _tk auth token from the venue page HTML."""
+    try:
+        r = requests.get(f'{BASE_URL}/{VENUE}', timeout=10,
+                         headers={'User-Agent': 'Mozilla/5.0'})
+        for pattern in [
+            r'["\']_tk["\']\s*[,:]\s*["\']([a-f0-9]{32})["\']',
+            r'\btk\b\s*[:=]\s*["\']([a-f0-9]{32})["\']',
+            r'authToken\s*[:=]\s*["\']([a-f0-9]{32})["\']',
+            r'token\s*[:=]\s*["\']([a-f0-9]{32})["\']',
+        ]:
+            m = re.search(pattern, r.text, re.IGNORECASE)
+            if m:
+                log.info('Token found')
+                return m.group(1)
+        log.warning('Token not found in page — trying without')
+        return ''
+    except Exception as e:
+        log.error(f'fetch_token: {e}')
+        return ''
+
+
+def negotiate(tk):
+    ts  = int(time.time() * 1000)
+    url = f'{BASE_URL}{HUB_PATH}/negotiate'
+    r   = requests.get(url, params={
+        'clientProtocol': '1.5',
+        '_tk':   tk,
+        '_gr':   'w',
+        '_tkdm': TKDM,
+        '_':     ts,
+    }, timeout=10, headers={'User-Agent': 'Mozilla/5.0', 'Referer': f'{BASE_URL}/{VENUE}'})
+    return r.json()
+
+
+def send_start(tk, conn_token):
+    ts = int(time.time() * 1000)
+    requests.get(f'{BASE_URL}{HUB_PATH}/start', params={
+        'clientProtocol': '1.5',
+        'transport':       'webSockets',
+        'connectionToken': conn_token,
+        '_tk':   tk,
+        '_gr':   'w',
+        '_tkdm': TKDM,
+        '_':     ts,
+    }, timeout=10, headers={'User-Agent': 'Mozilla/5.0', 'Referer': f'{BASE_URL}/{VENUE}'})
+
+
+# ─── Message parsing ──────────────────────────────────────────────────────────
+
+def parse_time_to_secs(t):
+    """'2:51.756' -> 171.756"""
+    if not t:
+        raise ValueError
+    s = str(t).strip()
+    if ':' in s:
+        m, sec = s.split(':', 1)
+        return int(m) * 60 + float(sec)
+    return float(s)
+
+
+def process_entry(entry):
+    """Extract and store lap data from a timing entry dict."""
+    if not isinstance(entry, dict):
+        return
+
+    car = (entry.get('NR') or entry.get('nr') or entry.get('carNumber') or
+           entry.get('CarNumber') or entry.get('number') or entry.get('Number'))
+    if not car:
+        return
+    car = str(car).upper().strip()
+
+    lap_time = (entry.get('LAST') or entry.get('last') or entry.get('lastLap') or
+                entry.get('LastLap') or entry.get('lapTime'))
+    best_time = (entry.get('BEST') or entry.get('best') or entry.get('bestLap') or
+                 entry.get('BestLap'))
+    lap_num   = (entry.get('LAP') or entry.get('lap') or entry.get('lapCount'))
+
+    # Store current race data regardless
+    with _lock:
+        _state['current'][car] = {
+            'pos':  entry.get('POS') or entry.get('pos'),
+            'gap':  entry.get('GAP') or entry.get('gap'),
+            'diff': entry.get('DIFF') or entry.get('diff'),
+            'last': lap_time,
+            'best': best_time,
+        }
+        _state['last_update'] = time.time()
+
+    if not lap_time:
+        return
+
+    with _lock:
+        laps = _state['laps'].setdefault(car, [])
+
+        # Skip duplicate (same lap time as last recorded)
+        if laps and laps[-1].get('time') == lap_time:
+            return
+
+        # Delta vs best lap so far
+        delta = None
+        try:
+            lap_secs  = parse_time_to_secs(lap_time)
+            best_ref  = best_time or (min((l['_secs'] for l in laps if l.get('_secs')), default=None))
+            if best_ref:
+                diff  = lap_secs - parse_time_to_secs(best_ref)
+                delta = ('+' if diff > 0 else '') + f'{diff:.3f}'
+        except Exception:
+            pass
+
+        is_best = bool(best_time and lap_time == best_time)
+
+        laps.append({
+            'lap':   lap_num if lap_num else len(laps) + 1,
+            'time':  lap_time,
+            '_secs': (lambda: parse_time_to_secs(lap_time) if lap_time else None)(),
+            'best':  is_best,
+            'delta': 'BEST' if is_best else (delta or ''),
+            's1':    entry.get('SECT-1') or entry.get('s1'),
+            's2':    entry.get('SECT-2') or entry.get('s2'),
+            's3':    entry.get('SECT-3') or entry.get('s3'),
+            's4':    entry.get('SECT-4') or entry.get('s4'),
+            'pos':   entry.get('POS') or entry.get('pos'),
+            'gap':   entry.get('GAP') or entry.get('gap'),
+        })
+
+        log.info(f'Car {car} lap {lap_num}: {lap_time} (delta {delta})')
+
+
+def dispatch(data):
+    """Route parsed data to process_entry."""
+    if isinstance(data, list):
+        for item in data:
+            process_entry(item)
+    elif isinstance(data, dict):
+        process_entry(data)
+
+
+def on_message(ws, raw):
+    try:
+        msg = json.loads(raw)
+    except Exception:
+        return
+
+    with _lock:
+        _state['raw_msgs'].append({'t': time.time(), 'msg': msg})
+
+    messages = msg.get('M', [])
+    if not messages:
+        return
+
+    for m in messages:
+        if isinstance(m, dict):
+            # Hub message: {"H":"hub","M":"method","A":[args]}
+            args = m.get('A', [])
+            if args:
+                dispatch(args[0] if len(args) == 1 else args)
+        elif isinstance(m, str):
+            # Persistent connection raw string
+            try:
+                dispatch(json.loads(m))
+            except Exception:
+                pass
+
+
+# ─── WebSocket connection loop ────────────────────────────────────────────────
+
+def connect_loop():
+    while True:
+        try:
+            _connect()
+        except Exception as e:
+            log.error(f'connect_loop: {e}')
+        with _lock:
+            _state['connected'] = False
+        log.info('Reconnecting in 20s…')
+        time.sleep(20)
+
+
+def _connect():
+    tk    = fetch_token()
+    neg   = negotiate(tk)
+    token = neg.get('ConnectionToken', '')
+    if not token:
+        raise RuntimeError('No ConnectionToken')
+
+    ts  = int(time.time() * 1000)
+    url = (f'wss://live.timing.asia{HUB_PATH}/connect'
+           f'?clientProtocol=1.5&transport=webSockets'
+           f'&connectionToken={quote(token, safe="")}'
+           f'&_tk={tk}&_gr=w&_tkdm={TKDM}&_={ts}')
+
+    def on_open(ws):
+        with _lock:
+            _state['connected'] = True
+        log.info('WebSocket connected')
+        send_start(tk, token)
+
+    def on_close(ws, code, msg):
+        with _lock:
+            _state['connected'] = False
+        log.info(f'WebSocket closed: {code}')
+
+    def on_error(ws, err):
+        log.error(f'WebSocket error: {err}')
+
+    ws = websocket.WebSocketApp(
+        url,
+        on_open=on_open,
+        on_message=on_message,
+        on_close=on_close,
+        on_error=on_error,
+        header={'User-Agent': 'Mozilla/5.0', 'Referer': f'{BASE_URL}/{VENUE}'},
+    )
+    ws.run_forever(ping_interval=25, ping_timeout=10)
+
+
+# ─── REST API ─────────────────────────────────────────────────────────────────
+
+def cors(resp):
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    return resp
+
+
+@app.route('/timing/status')
+def api_status():
+    with _lock:
+        return cors(jsonify({
+            'connected':   _state['connected'],
+            'cars':        list(_state['laps'].keys()),
+            'last_update': _state['last_update'],
+        }))
+
+
+@app.route('/timing/car/<car_number>')
+def api_car(car_number):
+    car = car_number.upper().strip()
+    with _lock:
+        # Return laps without internal _secs field
+        laps = [{k: v for k, v in l.items() if k != '_secs'}
+                for l in _state['laps'].get(car, [])]
+        current  = dict(_state['current'].get(car, {}))
+        connected = _state['connected']
+    return cors(jsonify({
+        'car':       car,
+        'connected': connected,
+        'current':   current,
+        'laps':      laps,
+    }))
+
+
+@app.route('/timing/all')
+def api_all():
+    with _lock:
+        result = {}
+        for car, laps in _state['laps'].items():
+            result[car] = [{k: v for k, v in l.items() if k != '_secs'} for l in laps]
+    return cors(jsonify(result))
+
+
+@app.route('/timing/debug')
+def api_debug():
+    """Last 20 raw SignalR messages — use this to inspect format during a race."""
+    with _lock:
+        msgs = list(_state['raw_msgs'])[-20:]
+    return cors(jsonify(msgs))
+
+
+@app.route('/timing/reset')
+def api_reset():
+    with _lock:
+        _state['laps'].clear()
+        _state['current'].clear()
+    return cors(jsonify({'ok': True}))
+
+
+if __name__ == '__main__':
+    threading.Thread(target=connect_loop, daemon=True).start()
+    app.run(host='127.0.0.1', port=5001, debug=False)

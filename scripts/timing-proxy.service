@@ -1,0 +1,16 @@
+[Unit]
+Description=JRT PitCam — Live Timing Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/jrt-timing
+ExecStart=/opt/jrt-timing/venv/bin/python /opt/jrt-timing/timing-proxy.py
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
