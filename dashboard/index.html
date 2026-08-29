@@ -1099,6 +1099,17 @@ async function pollTimingProxy() {
     // ── Flag auto-sync ──
     if (ses.flag) applyTimingFlag(ses.flag);
 
+    // ── Race timer auto-start / auto-stop ──
+    if (ses.status === 'RUNNING' && !state.raceStarted) {
+      startRaceTimer();
+      logEvent('Auto: Race started (live timing)', 'highlight');
+    }
+    if (ses.status === 'FINISH' && state.raceStarted) {
+      clearInterval(state.raceTimerHandle);
+      state.raceTimerHandle = null;
+      logEvent('Auto: Session finished (live timing)', '');
+    }
+
     // ── Lap count auto-sync ──
     const raceLap = ses.lap || cur.lap;
     if (raceLap) {
@@ -1107,6 +1118,31 @@ async function pollTimingProxy() {
         state.lapCount = n;
         document.getElementById('lap-count').textContent = n;
       }
+    }
+
+    // ── Last lap + best lap from live timing ──
+    if (data.laps && data.laps.length > 0) {
+      const newest = data.laps[data.laps.length - 1];
+      if (newest.time && newest.time !== '—') {
+        document.getElementById('last-lap').textContent = newest.time;
+        // Track best lap
+        const allTimes = data.laps.map(l => l.time).filter(Boolean);
+        let bestTime = null;
+        let bestSecs = Infinity;
+        for (const t of allTimes) {
+          try {
+            const parts = t.split(':');
+            const secs = parts.length === 2 ? parseInt(parts[0]) * 60 + parseFloat(parts[1]) : parseFloat(t);
+            if (secs < bestSecs) { bestSecs = secs; bestTime = t; }
+          } catch(e) {}
+        }
+        if (bestTime) document.getElementById('best-lap').textContent = bestTime;
+      }
+    }
+
+    // ── Last lap from current data if no laps yet ──
+    if (cur.last && cur.last !== '—') {
+      document.getElementById('last-lap').textContent = cur.last;
     }
 
     if (!data.laps || data.laps.length === 0) return;

@@ -167,9 +167,24 @@ def process_session(data):
         if total:
             s['total_laps'] = int(total)
 
-        status = data.get('sessionStatus') or data.get('SessionStatus') or data.get('status')
-        if status:
-            s['status'] = str(status)
+        # Session status — normalise to RUNNING / FINISH / PAUSE / UNKNOWN
+        raw_status = (data.get('sessionStatus') or data.get('SessionStatus') or
+                      data.get('status') or data.get('Status') or data.get('E.T.A.'))
+        if raw_status:
+            rs = str(raw_status).lower()
+            if any(x in rs for x in ['run', 'live', 'active', 'started']):
+                s['status'] = 'RUNNING'
+            elif any(x in rs for x in ['finish', 'end', 'complete', 'chequered', 'checkered']):
+                s['status'] = 'FINISH'
+            elif any(x in rs for x in ['pause', 'stop', 'red']):
+                s['status'] = 'PAUSE'
+            else:
+                s['status'] = str(raw_status).upper()
+
+        # Also detect FINISH from E.T.A. field containing "Finished"
+        eta_val = data.get('E.T.A.') or data.get('eta') or data.get('ETA') or ''
+        if 'finish' in str(eta_val).lower():
+            s['status'] = 'FINISH'
 
 
 def process_entry(entry):
