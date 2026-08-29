@@ -1223,9 +1223,14 @@ function injectTimingLap(lap, car) {
   } else {
     state.lapTimes.splice(idx, 0, entry);
   }
+  // Auto-deduct fuel for this lap
+  state.fuelLitres = Math.max(0, state.fuelLitres - state.lPerLap);
+  updateFuelDisplay();
+
   logEvent('Live timing — Car ' + car + ' Lap ' + lap.lap + ': ' + (lap.time || '—') +
            (lap.delta ? ' (' + lap.delta + ')' : '') +
-           (lap.pos ? ' P' + lap.pos : ''), lap.best ? 'highlight' : '');
+           (lap.pos ? ' P' + lap.pos : '') +
+           ' | Fuel ' + state.fuelLitres.toFixed(1) + 'L', lap.best ? 'highlight' : '');
 }
 
 // Patch renderLapLog to handle lt (live timing) rows differently
