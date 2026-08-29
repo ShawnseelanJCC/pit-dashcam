@@ -291,9 +291,15 @@
   .bar:nth-child(3) { height: 14px; } .bar:nth-child(4) { height: 19px; }
   .bar:nth-child(5) { height: 24px; }
 
-  #stint-section { min-width: 140px; }
-  #driver-name { font-family: var(--display); font-weight: 700; font-size: 15px; color: var(--blue); cursor: pointer; letter-spacing: 1px; }
-  #driver-name:hover { color: var(--text); }
+  #stint-section { min-width: 160px; }
+  #driver-select { font-family: var(--display); font-weight: 700; font-size: 15px; color: var(--blue); letter-spacing: 1px; background: transparent; border: none; cursor: pointer; padding: 0; max-width: 160px; }
+  #driver-select:focus { outline: none; }
+  #driver-select option { background: #111; color: var(--text); font-size: 13px; font-weight: 400; }
+  #driver-add-row { display: flex; gap: 3px; margin-top: 2px; }
+  #driver-add-input { font-family: var(--mono); font-size: 11px; color: var(--text); background: #0d0d0d; border: 1px solid var(--border); border-radius: 2px; padding: 1px 4px; width: 90px; }
+  #driver-add-input:focus { outline: none; border-color: var(--blue); }
+  #driver-add-btn { font-family: var(--display); font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 1px 5px; border: 1px solid var(--blue); background: transparent; color: var(--blue); cursor: pointer; border-radius: 2px; }
+  #driver-add-btn:hover { background: var(--blue); color: #000; }
 
   #fuel-section { min-width: 220px; }
   .fuel-bar-wrap { height: 8px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 4px 0; }
@@ -513,7 +519,12 @@
   </div>
   <div class="bb-section" id="stint-section">
     <div class="bb-label">Driver / Stint</div>
-    <div id="driver-name" onclick="cycleDriver()" title="Click to change driver">SHAWN SEELAN</div>
+    <select id="driver-select" onchange="selectDriver(this.value)"></select>
+    <div id="driver-add-row">
+      <input id="driver-add-input" type="text" placeholder="Add driver…" maxlength="24"
+             onkeydown="if(event.key==='Enter') addDriver()">
+      <button id="driver-add-btn" onclick="addDriver()">ADD</button>
+    </div>
     <div class="bb-value" id="stint-timer">00:00:00</div>
   </div>
   <div class="bb-section" id="fuel-section">
@@ -559,7 +570,7 @@
 </div>
 
 <script>
-const DRIVERS = ['SHAWN SEELAN', 'NATASHA SEATTER', 'JAY WONG', 'PATRICK', 'MONG'];
+let DRIVERS = ['SHAWN SEELAN', 'NATASHA SEATTER', 'JAY WONG', 'PATRICK', 'MONG'];
 const DEFAULT_STREAM_URL = 'http://104.248.151.105:8080/live/jrt.m3u8';
 
 const state = {
@@ -573,7 +584,7 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('url-input').value = DEFAULT_STREAM_URL;
-  document.getElementById('driver-name').textContent = DRIVERS[0];
+  rebuildDriverSelect();
   updateFuelDisplay();
   logEvent('System ready', '');
 });
@@ -878,7 +889,7 @@ function drawRecordingOverlay(ctx, w, h) {
   const lapCount  = document.getElementById('lap-count').textContent;
   const lastLap   = document.getElementById('last-lap').textContent;
   const bestLap   = document.getElementById('best-lap').textContent;
-  const driver    = document.getElementById('driver-name').textContent;
+  const driver    = DRIVERS[state.driverIdx] || '';
   const fuel      = state.fuelLitres.toFixed(1) + 'L';
   const flagBtn   = document.querySelector('.flag-btn.active');
   const flag      = flagBtn ? flagBtn.dataset.flag : '';
@@ -976,10 +987,36 @@ function setFlag(btn) {
   logEvent('Flag: ' + flag, flag === 'RED' ? 'warn' : flag === 'GREEN' ? 'highlight' : '');
 }
 
-function cycleDriver() {
-  state.driverIdx = (state.driverIdx + 1) % DRIVERS.length;
-  const name = DRIVERS[state.driverIdx];
-  document.getElementById('driver-name').textContent = name;
+function rebuildDriverSelect() {
+  const sel = document.getElementById('driver-select');
+  sel.innerHTML = '';
+  DRIVERS.forEach((d, i) => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    if (i === state.driverIdx) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function selectDriver(name) {
+  const idx = DRIVERS.indexOf(name);
+  if (idx >= 0) state.driverIdx = idx;
+  updateFsDriver();
+  startStintTimer();
+  logEvent('Driver: ' + name, 'highlight');
+}
+
+function addDriver() {
+  const inp = document.getElementById('driver-add-input');
+  const name = inp.value.trim().toUpperCase();
+  if (!name) return;
+  if (!DRIVERS.includes(name)) {
+    DRIVERS.push(name);
+  }
+  state.driverIdx = DRIVERS.indexOf(name);
+  rebuildDriverSelect();
+  document.getElementById('driver-select').value = name;
+  inp.value = '';
   updateFsDriver();
   startStintTimer();
   logEvent('Driver: ' + name, 'highlight');
