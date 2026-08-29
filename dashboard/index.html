@@ -711,37 +711,51 @@ async function pushSync() {
 async function pullSync() {
   try {
     const r = await fetch('/timing/sync');
+    if (!r.ok) return;
     const d = await r.json();
-    // Apply remote state
+
+    // Flag
     if (d.flag) {
       document.querySelectorAll('.flag-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.flag === d.flag);
       });
-      document.getElementById('top-bar').className = 'flag-' + d.flag.toLowerCase();
     }
-    if (typeof d.driverIdx === 'number' && d.driverIdx !== state.driverIdx) {
+
+    // Driver
+    if (typeof d.driverIdx === 'number' && d.driverIdx !== state.driverIdx && d.driverIdx < DRIVERS.length) {
       state.driverIdx = d.driverIdx;
       rebuildDriverSelect();
       updateFsDriver();
     }
-    if (typeof d.fuelLitres === 'number') {
+
+    // Fuel
+    if (typeof d.fuelLitres === 'number' && Math.abs(d.fuelLitres - state.fuelLitres) > 0.05) {
       state.fuelLitres = d.fuelLitres;
       updateFuelDisplay();
     }
-    if (typeof d.lapCount === 'number') {
+
+    // Laps
+    if (typeof d.lapCount === 'number' && d.lapCount !== state.lapCount) {
       state.lapCount = d.lapCount;
       document.getElementById('lap-count').textContent = d.lapCount;
     }
-    if (d.lastLap) document.getElementById('last-lap').textContent = d.lastLap;
-    if (d.bestLap) document.getElementById('best-lap').textContent = d.bestLap;
+    if (d.lastLap && d.lastLap !== '--:--') document.getElementById('last-lap').textContent = d.lastLap;
+    if (d.bestLap && d.bestLap !== '--:--') document.getElementById('best-lap').textContent = d.bestLap;
+
+    // Race timer
     if (typeof d.raceStarted === 'boolean') {
       if (d.raceStarted && !state.raceStarted) {
         state.raceStarted = true;
-        state.raceStartTime = d.raceStartTime;
-        if (!state.raceTimerHandle) state.raceTimerHandle = setInterval(tickRaceTimer, 500);
+        state.raceStartTime = d.raceStartTime || Date.now();
+        if (!state.raceTimerHandle) {
+          state.raceTimerHandle = setInterval(() => {
+            document.getElementById('race-timer').textContent = formatHMS(Date.now() - state.raceStartTime);
+          }, 1000);
+        }
       } else if (!d.raceStarted && state.raceStarted) {
         state.raceStarted = false;
         if (state.raceTimerHandle) { clearInterval(state.raceTimerHandle); state.raceTimerHandle = null; }
+        document.getElementById('race-timer').textContent = '00:00:00';
       }
     }
   } catch(e) {}
