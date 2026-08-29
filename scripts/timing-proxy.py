@@ -64,6 +64,7 @@ _sync = {
     'lapCount': 0,
     'lastLap': None,
     'bestLap': None,
+    'eventLog': [],
 }
 _sync_lock = threading.Lock()
 

@@ -699,6 +699,7 @@ function buildSyncPayload() {
     lapCount: state.lapCount,
     lastLap: document.getElementById('last-lap').textContent,
     bestLap: document.getElementById('best-lap').textContent,
+    eventLog: state.eventLog.slice(0, 30),
   };
 }
 
@@ -741,6 +742,19 @@ async function pullSync() {
     }
     if (d.lastLap && d.lastLap !== '--:--') document.getElementById('last-lap').textContent = d.lastLap;
     if (d.bestLap && d.bestLap !== '--:--') document.getElementById('best-lap').textContent = d.bestLap;
+
+    // Event log — replace local log with master's log
+    if (Array.isArray(d.eventLog) && d.eventLog.length > 0) {
+      const topRemote = d.eventLog[0] && d.eventLog[0].msg;
+      const topLocal  = state.eventLog[0] && state.eventLog[0].msg;
+      if (topRemote !== topLocal) {
+        state.eventLog = d.eventLog;
+        const el = document.getElementById('event-log');
+        if (el) el.innerHTML = state.eventLog.map(e =>
+          `<div class="log-entry ${e.type}"><span class="log-time">${e.time}</span><span class="log-msg">${e.msg}</span></div>`
+        ).join('');
+      }
+    }
 
     // Race timer
     if (typeof d.raceStarted === 'boolean') {
