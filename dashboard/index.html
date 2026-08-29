@@ -92,10 +92,12 @@
   .flag-btn.green  { border-color: var(--green); color: var(--green); }
   .flag-btn.yellow { border-color: var(--amber); color: var(--amber); }
   .flag-btn.sc     { border-color: var(--blue);  color: var(--blue);  }
+  .flag-btn.fcy    { border-color: #ff8c00;      color: #ff8c00;      }
   .flag-btn.red-f  { border-color: var(--red);   color: var(--red);   }
   .flag-btn.active.green  { background: var(--green);  color: #000; }
   .flag-btn.active.yellow { background: var(--amber);  color: #000; }
   .flag-btn.active.sc     { background: var(--blue);   color: #000; }
+  .flag-btn.active.fcy    { background: #ff8c00;       color: #000; }
   .flag-btn.active.red-f  { background: var(--red);    color: #fff; }
 
   #middle { grid-area: middle; display: flex; overflow: hidden; }
@@ -366,6 +368,7 @@
   <div class="flag-btns">
     <button class="flag-btn green  active" data-flag="GREEN"  onclick="setFlag(this)">GREEN</button>
     <button class="flag-btn yellow"        data-flag="YELLOW" onclick="setFlag(this)">YELLOW</button>
+    <button class="flag-btn fcy"           data-flag="FCY"    onclick="setFlag(this)">FCY</button>
     <button class="flag-btn sc"            data-flag="SC"     onclick="setFlag(this)">SC</button>
     <button class="flag-btn red-f"         data-flag="RED"    onclick="setFlag(this)">RED</button>
     <button id="timing-btn" onclick="toggleTiming()">⏱ LIVE TIMING</button>
@@ -1153,7 +1156,7 @@ function applyTimingLiveData(cur, ses) {
   if (ses.flag) {
     const el = document.getElementById('tld-flag');
     el.textContent = ses.flag;
-    el.style.color = {GREEN:'#00e87a', YELLOW:'#ffb800', SC:'#00aaff', RED:'#e8001d'}[ses.flag] || '#e0e0e0';
+    el.style.color = {GREEN:'#00e87a', YELLOW:'#ffb800', FCY:'#ff8c00', SC:'#00aaff', RED:'#e8001d'}[ses.flag] || '#e0e0e0';
   }
 }
 
