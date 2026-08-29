@@ -313,8 +313,9 @@
   .fuel-setup-input:focus { outline: none; border-color: var(--amber); }
   .fuel-btn { font-family: var(--mono); font-size: 13px; padding: 2px 6px; border: 1px solid var(--border); background: transparent; color: var(--label); cursor: pointer; border-radius: 2px; }
   .fuel-btn:hover { border-color: var(--text); color: var(--text); }
-  #refuel-btn { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 1px; padding: 2px 8px; border: 1px solid var(--green); background: transparent; color: var(--green); cursor: pointer; border-radius: 2px; }
-  #refuel-btn:hover { background: var(--green); color: #000; }
+  #fuel-edit-input { font-family: var(--mono); font-size: 13px; color: var(--green); background: #0d0d0d; border: 1px solid var(--green); border-radius: 2px; width: 60px; text-align: center; padding: 1px 3px; -moz-appearance: textfield; }
+  #fuel-edit-input::-webkit-inner-spin-button, #fuel-edit-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+  #fuel-edit-input:focus { outline: none; }
 
   #lap-section { min-width: 90px; align-items: center; }
   #lap-btn { font-family: var(--display); font-weight: 700; font-size: 13px; letter-spacing: 1px; padding: 8px 12px; border: 1.5px solid var(--amber); background: transparent; color: var(--amber); cursor: pointer; border-radius: 2px; width: 100%; }
@@ -532,10 +533,9 @@
       </div>
     </div>
     <div class="fuel-controls">
-      <div class="fuel-val" id="fuel-pct">45L (100%)</div>
-      <input id="refuel-litres" type="number" placeholder="L" min="0.1" max="200" step="0.5"
-             onkeydown="if(event.key==='Enter') refuel()">
-      <button id="refuel-btn" onclick="refuel()">ADD</button>
+      <div class="fuel-val" id="fuel-pct" title="Click to edit fuel level" onclick="startFuelEdit()" style="cursor:pointer;">45L (100%)</div>
+      <input id="fuel-edit-input" type="number" placeholder="litres" min="0" max="200" step="0.5" style="display:none;"
+             onblur="commitFuelEdit()" onkeydown="if(event.key==='Enter'){commitFuelEdit();}else if(event.key==='Escape'){cancelFuelEdit();}">
     </div>
     <div class="fuel-bar-wrap"><div id="fuel-bar"></div></div>
   </div>
@@ -748,21 +748,35 @@ function setLPerLap(val) {
   document.getElementById('l-per-lap-val').value = state.lPerLap.toFixed(1);
 }
 
-function refuel() {
-  const input = document.getElementById('refuel-litres');
-  const added = parseFloat(input && input.value);
-  if (!isNaN(added) && added > 0) {
-    const before = state.fuelLitres;
-    state.fuelLitres = Math.min(state.tankSize, state.fuelLitres + added);
-    logEvent('Refuel +' + added.toFixed(1) + 'L → ' + state.fuelLitres.toFixed(1) + 'L', 'highlight');
-    if (input) input.value = '';
-  } else {
-    state.fuelLitres = state.tankSize;
-    logEvent('Refuel — full ' + state.tankSize + 'L', 'highlight');
-  }
-  state.fuelWarned = false;
-  updateFuelDisplay();
+function startFuelEdit() {
+  const disp = document.getElementById('fuel-pct');
+  const inp  = document.getElementById('fuel-edit-input');
+  disp.style.display = 'none';
+  inp.style.display  = '';
+  inp.value = state.fuelLitres.toFixed(1);
+  inp.select();
+  inp.focus();
 }
+function commitFuelEdit() {
+  const disp = document.getElementById('fuel-pct');
+  const inp  = document.getElementById('fuel-edit-input');
+  const val  = parseFloat(inp.value);
+  if (!isNaN(val) && val >= 0) {
+    const prev = state.fuelLitres;
+    state.fuelLitres = Math.min(state.tankSize, val);
+    state.fuelWarned = false;
+    const diff = state.fuelLitres - prev;
+    logEvent('Fuel set to ' + state.fuelLitres.toFixed(1) + 'L' + (diff > 0 ? ' (+' + diff.toFixed(1) + 'L)' : ''), 'highlight');
+    updateFuelDisplay();
+  }
+  inp.style.display  = 'none';
+  disp.style.display = '';
+}
+function cancelFuelEdit() {
+  document.getElementById('fuel-edit-input').style.display = 'none';
+  document.getElementById('fuel-pct').style.display = '';
+}
+function refuel() {}
 
 function updateFuelDisplay() {
   const pct = state.tankSize > 0 ? (state.fuelLitres / state.tankSize) * 100 : 0;
