@@ -246,12 +246,22 @@
   #timing-status-row { font-family: var(--mono); font-size: 10px; color: var(--label); margin-bottom: 6px; }
   #timing-status-row .ts-on  { color: var(--green); }
   #timing-status-row .ts-off { color: var(--dim); }
-  #timing-live-data { display: none; margin-top: 6px; }
-  #timing-live-data .tld-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
-  #timing-live-data .tld-item { font-family: var(--mono); font-size: 10px; }
-  #timing-live-data .tld-label { color: var(--label); font-size: 9px; letter-spacing: 1px; }
-  #timing-live-data .tld-val { color: var(--text); font-size: 16px; font-weight: 700; }
-  #timing-live-data .tld-val.pos-val { color: var(--amber); font-size: 22px; }
+  #timing-live-data { display: none; margin-top: 8px; }
+  #timing-live-data .tld-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px 4px; margin-bottom: 8px; }
+  #timing-live-data .tld-item { font-family: var(--mono); }
+  #timing-live-data .tld-label { color: var(--label); font-size: 8px; letter-spacing: 1px; margin-bottom: 1px; }
+  #timing-live-data .tld-val { color: var(--text); font-size: 15px; font-weight: 700; line-height: 1; }
+  #timing-live-data .tld-val.pos-val { color: var(--amber); font-size: 20px; }
+  #timing-live-data .tld-val.cls-val { color: var(--blue); }
+  #timing-live-data .tld-val.gap-fwd { color: var(--red); font-size: 12px; }
+  #timing-live-data .tld-val.gap-bwd { color: var(--green); font-size: 12px; }
+  #tld-sectors { border-top: 1px solid var(--border); padding-top: 6px; margin-top: 2px; }
+  #tld-sectors .sec-title { font-family: var(--mono); font-size: 8px; color: var(--label); letter-spacing: 1px; margin-bottom: 4px; }
+  #tld-sectors .sec-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 3px; }
+  #tld-sectors .sec-item { font-family: var(--mono); text-align: center; }
+  #tld-sectors .sec-lbl { font-size: 7px; color: var(--label); }
+  #tld-sectors .sec-val { font-size: 11px; color: var(--text); font-weight: 600; }
+  #tld-eta-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; border-top: 1px solid var(--border); padding-top: 5px; font-family: var(--mono); font-size: 10px; color: var(--label); }
   .lt-row { background: rgba(0,170,255,0.04); }
   .lt-row td:first-child::after { content: ' ↙'; color: var(--blue); font-size: 9px; }
   #lap-log-table tr:first-child td { color: var(--green); }
@@ -412,21 +422,42 @@
       <div id="timing-live-data">
         <div class="tld-grid">
           <div class="tld-item">
-            <div class="tld-label">POSITION</div>
+            <div class="tld-label">OVERALL</div>
             <div class="tld-val pos-val" id="tld-pos">—</div>
+          </div>
+          <div class="tld-item">
+            <div class="tld-label">IN CLASS</div>
+            <div class="tld-val cls-val" id="tld-cls-pos">—</div>
+          </div>
+          <div class="tld-item">
+            <div class="tld-label">PITS</div>
+            <div class="tld-val" id="tld-pit">—</div>
+          </div>
+          <div class="tld-item">
+            <div class="tld-label">GAP AHEAD</div>
+            <div class="tld-val gap-fwd" id="tld-gap-fwd">—</div>
+          </div>
+          <div class="tld-item">
+            <div class="tld-label">GAP BEHIND</div>
+            <div class="tld-val gap-bwd" id="tld-gap-bwd">—</div>
           </div>
           <div class="tld-item">
             <div class="tld-label">RACE LAP</div>
             <div class="tld-val" id="tld-lap">—</div>
           </div>
-          <div class="tld-item">
-            <div class="tld-label">GAP</div>
-            <div class="tld-val" id="tld-gap" style="font-size:13px">—</div>
+        </div>
+        <div id="tld-sectors">
+          <div class="sec-title">SECTORS — LAST LAP</div>
+          <div class="sec-row">
+            <div class="sec-item"><div class="sec-lbl">S1</div><div class="sec-val" id="tld-s1">—</div></div>
+            <div class="sec-item"><div class="sec-lbl">S2</div><div class="sec-val" id="tld-s2">—</div></div>
+            <div class="sec-item"><div class="sec-lbl">S3</div><div class="sec-val" id="tld-s3">—</div></div>
+            <div class="sec-item"><div class="sec-lbl">S4</div><div class="sec-val" id="tld-s4">—</div></div>
           </div>
-          <div class="tld-item">
-            <div class="tld-label">FLAG</div>
-            <div class="tld-val" id="tld-flag" style="font-size:13px">—</div>
-          </div>
+        </div>
+        <div id="tld-eta-row">
+          <span>ETA <span id="tld-eta" style="color:var(--text)">—</span></span>
+          <span>FLAG <span id="tld-flag" style="font-weight:700">—</span></span>
         </div>
       </div>
     </div>
@@ -1049,9 +1080,17 @@ async function pollTimingProxy() {
 
     setTimingStatus(data.connected ? 'live (' + car + ')' : 'waiting for session… (' + car + ')', data.connected);
 
-    // ── Position, lap, gap ──
+    // ── Position, lap, gap, sectors ──
     const cur = data.current || {};
     const ses = data.session || {};
+    // Fill sectors from most recent lap if not in current
+    if (data.laps && data.laps.length > 0) {
+      const lastLap = data.laps[data.laps.length - 1];
+      if (!cur.s1 && lastLap.s1) cur.s1 = lastLap.s1;
+      if (!cur.s2 && lastLap.s2) cur.s2 = lastLap.s2;
+      if (!cur.s3 && lastLap.s3) cur.s3 = lastLap.s3;
+      if (!cur.s4 && lastLap.s4) cur.s4 = lastLap.s4;
+    }
     applyTimingLiveData(cur, ses);
 
     // ── Flag auto-sync ──
@@ -1089,10 +1128,28 @@ function applyTimingLiveData(cur, ses) {
   const hasData = cur.pos || ses.lap || cur.gap || ses.flag;
   panel.style.display = hasData ? 'block' : 'none';
 
-  if (cur.pos) document.getElementById('tld-pos').textContent = 'P' + cur.pos;
+  function set(id, val, fallback) {
+    document.getElementById(id).textContent = val || fallback || '—';
+  }
+
+  if (cur.pos)     set('tld-pos',     'P' + cur.pos);
+  if (cur.cls_pos) set('tld-cls-pos', 'P' + cur.cls_pos + (cur.cls ? ' ' + cur.cls : ''));
+  if (cur.pit != null) set('tld-pit', cur.pit);
+
   const lap = ses.lap || cur.lap;
-  if (lap) document.getElementById('tld-lap').textContent = lap + (ses.total_laps ? '/' + ses.total_laps : '');
-  if (cur.gap) document.getElementById('tld-gap').textContent = cur.gap;
+  if (lap) set('tld-lap', lap + (ses.total_laps ? '/' + ses.total_laps : ''));
+
+  if (cur.diff)        set('tld-gap-fwd', cur.diff);
+  if (cur.gap_behind)  set('tld-gap-bwd', cur.gap_behind);
+
+  // Sectors — try current data first, fall back to last lap entry
+  set('tld-s1', cur.s1);
+  set('tld-s2', cur.s2);
+  set('tld-s3', cur.s3);
+  set('tld-s4', cur.s4);
+
+  if (cur.eta) set('tld-eta', cur.eta);
+
   if (ses.flag) {
     const el = document.getElementById('tld-flag');
     el.textContent = ses.flag;

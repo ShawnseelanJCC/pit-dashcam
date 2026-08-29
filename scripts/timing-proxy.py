@@ -195,13 +195,23 @@ def process_entry(entry):
 
     # Store current race data regardless
     with _lock:
+        pos = entry.get('POS') or entry.get('pos')
         _state['current'][car] = {
-            'pos':  entry.get('POS') or entry.get('pos'),
-            'gap':  entry.get('GAP') or entry.get('gap'),
-            'diff': entry.get('DIFF') or entry.get('diff'),
-            'last': lap_time,
-            'best': best_time,
-            'lap':  lap_num,
+            'pos':       pos,
+            'pos_int':   int(pos) if pos and str(pos).isdigit() else None,
+            'gap':       entry.get('GAP') or entry.get('gap'),
+            'diff':      entry.get('DIFF') or entry.get('diff'),
+            'last':      lap_time,
+            'best':      best_time,
+            'lap':       lap_num,
+            'pit':       entry.get('PIT') or entry.get('pit') or entry.get('pits'),
+            'eta':       entry.get('E.T.A.') or entry.get('ETA') or entry.get('eta'),
+            'cls':       entry.get('CLS') or entry.get('cls'),
+            'cls_pos':   entry.get('PIC') or entry.get('pic') or entry.get('cls_pos'),
+            's1':        entry.get('SECT-1') or entry.get('s1'),
+            's2':        entry.get('SECT-2') or entry.get('s2'),
+            's3':        entry.get('SECT-3') or entry.get('s3'),
+            's4':        entry.get('SECT-4') or entry.get('s4'),
         }
         _state['last_update'] = time.time()
 
@@ -359,6 +369,19 @@ def api_car(car_number):
         current   = dict(_state['current'].get(car, {}))
         session   = dict(_state['session'])
         connected = _state['connected']
+        # Compute gap_behind: find the car at pos+1, their DIFF is the gap between them and us
+        my_pos = current.get('pos_int')
+        gap_behind = None
+        if my_pos:
+            for other_car, other_data in _state['current'].items():
+                if other_car == car:
+                    continue
+                other_pos = other_data.get('pos_int')
+                if other_pos and other_pos == my_pos + 1:
+                    gap_behind = other_data.get('diff')
+                    break
+        current['gap_behind'] = gap_behind
+
     return cors(jsonify({
         'car':       car,
         'connected': connected,
