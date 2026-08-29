@@ -246,6 +246,12 @@
   #timing-status-row { font-family: var(--mono); font-size: 10px; color: var(--label); margin-bottom: 6px; }
   #timing-status-row .ts-on  { color: var(--green); }
   #timing-status-row .ts-off { color: var(--dim); }
+  #timing-live-data { display: none; margin-top: 6px; }
+  #timing-live-data .tld-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
+  #timing-live-data .tld-item { font-family: var(--mono); font-size: 10px; }
+  #timing-live-data .tld-label { color: var(--label); font-size: 9px; letter-spacing: 1px; }
+  #timing-live-data .tld-val { color: var(--text); font-size: 16px; font-weight: 700; }
+  #timing-live-data .tld-val.pos-val { color: var(--amber); font-size: 22px; }
   .lt-row { background: rgba(0,170,255,0.04); }
   .lt-row td:first-child::after { content: ' ↙'; color: var(--blue); font-size: 9px; }
   #lap-log-table tr:first-child td { color: var(--green); }
@@ -403,6 +409,26 @@
         <button id="timing-car-btn" onclick="toggleTimingFeed()">SYNC</button>
       </div>
       <div id="timing-status-row"><span class="ts-off">⬤</span> <span id="timing-status-text">off — enter car number</span></div>
+      <div id="timing-live-data">
+        <div class="tld-grid">
+          <div class="tld-item">
+            <div class="tld-label">POSITION</div>
+            <div class="tld-val pos-val" id="tld-pos">—</div>
+          </div>
+          <div class="tld-item">
+            <div class="tld-label">RACE LAP</div>
+            <div class="tld-val" id="tld-lap">—</div>
+          </div>
+          <div class="tld-item">
+            <div class="tld-label">GAP</div>
+            <div class="tld-val" id="tld-gap" style="font-size:13px">—</div>
+          </div>
+          <div class="tld-item">
+            <div class="tld-label">FLAG</div>
+            <div class="tld-val" id="tld-flag" style="font-size:13px">—</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="sb-section">
       <div class="sb-title">Stream Info</div>
@@ -1001,6 +1027,7 @@ function stopTimingFeed() {
   clearInterval(timingState.pollHandle);
   document.getElementById('timing-car-btn').textContent = 'SYNC';
   document.getElementById('timing-car-input').disabled  = false;
+  document.getElementById('timing-live-data').style.display = 'none';
   setTimingStatus('off', false);
   logEvent('Live timing sync stopped', '');
 }
@@ -1022,15 +1049,31 @@ async function pollTimingProxy() {
 
     setTimingStatus(data.connected ? 'live (' + car + ')' : 'waiting for session… (' + car + ')', data.connected);
 
+    // ── Position, lap, gap ──
+    const cur = data.current || {};
+    const ses = data.session || {};
+    applyTimingLiveData(cur, ses);
+
+    // ── Flag auto-sync ──
+    if (ses.flag) applyTimingFlag(ses.flag);
+
+    // ── Lap count auto-sync ──
+    const raceLap = ses.lap || cur.lap;
+    if (raceLap) {
+      const n = parseInt(raceLap);
+      if (!isNaN(n) && n > state.lapCount) {
+        state.lapCount = n;
+        document.getElementById('lap-count').textContent = n;
+      }
+    }
+
     if (!data.laps || data.laps.length === 0) return;
 
-    // Laps from proxy are oldest-first. Add any we haven't seen yet.
     let added = 0;
     for (const lap of data.laps) {
       const key = String(lap.lap);
       if (timingState.knownLaps.has(key)) continue;
       timingState.knownLaps.add(key);
-
       injectTimingLap(lap, car);
       added++;
     }
@@ -1039,6 +1082,32 @@ async function pollTimingProxy() {
   } catch (e) {
     setTimingStatus('proxy unreachable — is it running?', false);
   }
+}
+
+function applyTimingLiveData(cur, ses) {
+  const panel = document.getElementById('timing-live-data');
+  const hasData = cur.pos || ses.lap || cur.gap || ses.flag;
+  panel.style.display = hasData ? 'block' : 'none';
+
+  if (cur.pos) document.getElementById('tld-pos').textContent = 'P' + cur.pos;
+  const lap = ses.lap || cur.lap;
+  if (lap) document.getElementById('tld-lap').textContent = lap + (ses.total_laps ? '/' + ses.total_laps : '');
+  if (cur.gap) document.getElementById('tld-gap').textContent = cur.gap;
+  if (ses.flag) {
+    const el = document.getElementById('tld-flag');
+    el.textContent = ses.flag;
+    el.style.color = {GREEN:'#00e87a', YELLOW:'#ffb800', SC:'#00aaff', RED:'#e8001d'}[ses.flag] || '#e0e0e0';
+  }
+}
+
+function applyTimingFlag(flag) {
+  const btn = document.querySelector(`.flag-btn[data-flag="${flag}"]`);
+  if (!btn) return;
+  const currentActive = document.querySelector('.flag-btn.active');
+  if (currentActive && currentActive.dataset.flag === flag) return; // already set
+  document.querySelectorAll('.flag-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  logEvent('Auto flag: ' + flag + ' (live timing)', flag === 'RED' ? 'warn' : flag === 'GREEN' ? 'highlight' : '');
 }
 
 function injectTimingLap(lap, car) {

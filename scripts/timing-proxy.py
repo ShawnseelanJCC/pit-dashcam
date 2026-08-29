@@ -30,11 +30,47 @@ TKDM      = '54561'   # Sepang venue ID — update if they change it
 _state = {
     'connected':    False,
     'laps':         {},        # 'CAR_NR' -> [lap_dict, ...]
-    'current':      {},        # 'CAR_NR' -> latest position/gap data
+    'current':      {},        # 'CAR_NR' -> latest position/gap/lap data
+    'session':      {          # session-wide data
+        'flag':        None,   # 'GREEN','YELLOW','SC','RED'
+        'lap':         None,   # current race lap number
+        'total_laps':  None,
+        'session_name': None,
+        'status':      None,   # 'RUNNING','FINISH','PAUSE' etc
+    },
     'raw_msgs':     deque(maxlen=200),
     'last_update':  0,
 }
 _lock = threading.Lock()
+
+_FLAG_MAP = {
+    'green':               'GREEN',
+    'chequered':           'GREEN',
+    'checkered':           'GREEN',
+    'yellow':              'YELLOW',
+    'full yellow':         'YELLOW',
+    'full course yellow':  'YELLOW',
+    'fcy':                 'YELLOW',
+    'safety car':          'SC',
+    'sc':                  'SC',
+    'red':                 'RED',
+    'red flag':            'RED',
+}
+
+# Map timing system flag strings to our dashboard flag names
+_FLAG_MAP = {
+    'green':        'GREEN',
+    'chequered':    'GREEN',
+    'checkered':    'GREEN',
+    'yellow':       'YELLOW',
+    'full yellow':  'YELLOW',
+    'full course yellow': 'YELLOW',
+    'fcy':          'YELLOW',
+    'safety car':   'SC',
+    'sc':           'SC',
+    'red':          'RED',
+    'red flag':     'RED',
+}
 
 
 # ─── Token + negotiate ────────────────────────────────────────────────────────
@@ -100,10 +136,49 @@ def parse_time_to_secs(t):
     return float(s)
 
 
+def parse_flag(val):
+    """Normalise a flag string to our dashboard names, or None."""
+    if not val:
+        return None
+    return _FLAG_MAP.get(str(val).lower().strip())
+
+
+def process_session(data):
+    """Extract session-level data: flag, lap number, status."""
+    if not isinstance(data, dict):
+        return
+    with _lock:
+        s = _state['session']
+
+        raw_flag = (data.get('flag') or data.get('Flag') or data.get('trackStatus') or
+                    data.get('TrackStatus') or data.get('condition') or data.get('Condition'))
+        flag = parse_flag(raw_flag)
+        if flag:
+            if s['flag'] != flag:
+                log.info(f'Flag: {flag}')
+            s['flag'] = flag
+
+        lap = (data.get('raceLap') or data.get('RaceLap') or data.get('currentLap') or
+               data.get('CurrentLap'))
+        if lap:
+            s['lap'] = int(lap)
+
+        total = (data.get('totalLaps') or data.get('TotalLaps'))
+        if total:
+            s['total_laps'] = int(total)
+
+        status = data.get('sessionStatus') or data.get('SessionStatus') or data.get('status')
+        if status:
+            s['status'] = str(status)
+
+
 def process_entry(entry):
     """Extract and store lap data from a timing entry dict."""
     if not isinstance(entry, dict):
         return
+
+    # Pull out any session-level fields embedded in the same message
+    process_session(entry)
 
     car = (entry.get('NR') or entry.get('nr') or entry.get('carNumber') or
            entry.get('CarNumber') or entry.get('number') or entry.get('Number'))
@@ -115,7 +190,8 @@ def process_entry(entry):
                 entry.get('LastLap') or entry.get('lapTime'))
     best_time = (entry.get('BEST') or entry.get('best') or entry.get('bestLap') or
                  entry.get('BestLap'))
-    lap_num   = (entry.get('LAP') or entry.get('lap') or entry.get('lapCount'))
+    lap_num   = (entry.get('LAP') or entry.get('lap') or entry.get('lapCount') or
+                 entry.get('LapCount'))
 
     # Store current race data regardless
     with _lock:
@@ -125,6 +201,7 @@ def process_entry(entry):
             'diff': entry.get('DIFF') or entry.get('diff'),
             'last': lap_time,
             'best': best_time,
+            'lap':  lap_num,
         }
         _state['last_update'] = time.time()
 
@@ -277,15 +354,16 @@ def api_status():
 def api_car(car_number):
     car = car_number.upper().strip()
     with _lock:
-        # Return laps without internal _secs field
-        laps = [{k: v for k, v in l.items() if k != '_secs'}
-                for l in _state['laps'].get(car, [])]
-        current  = dict(_state['current'].get(car, {}))
+        laps      = [{k: v for k, v in l.items() if k != '_secs'}
+                     for l in _state['laps'].get(car, [])]
+        current   = dict(_state['current'].get(car, {}))
+        session   = dict(_state['session'])
         connected = _state['connected']
     return cors(jsonify({
         'car':       car,
         'connected': connected,
         'current':   current,
+        'session':   session,
         'laps':      laps,
     }))
 
