@@ -471,19 +471,15 @@ def api_reset():
     return cors(jsonify({'ok': True}))
 
 
-@app.route('/timing/sync', methods=['GET'])
-def api_sync_get():
+@app.route('/timing/sync', methods=['GET', 'POST'])
+def api_sync():
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        with _sync_lock:
+            for k in _sync:
+                if k in data:
+                    _sync[k] = data[k]
     with _sync_lock:
-        return cors(jsonify(dict(_sync)))
-
-
-@app.route('/timing/sync', methods=['POST'])
-def api_sync_post():
-    data = request.get_json(silent=True) or {}
-    with _sync_lock:
-        for k in _sync:
-            if k in data:
-                _sync[k] = data[k]
         return cors(jsonify(dict(_sync)))
 
 
