@@ -77,10 +77,16 @@
   .top-stat .value.big { font-size: 18px; color: var(--green); }
 
   .flag-btns { display: flex; gap: 5px; margin-left: auto; align-items: center; }
+  #drivers-btn {
+    font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 2px; border: 1.5px solid #aaa;
+    background: transparent; color: #aaa; cursor: pointer; transition: all .15s; margin-left: 10px;
+  }
+  #drivers-btn:hover { background: #aaa; color: #000; }
   #timing-btn {
     font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px;
     padding: 4px 10px; border-radius: 2px; border: 1.5px solid var(--blue);
-    background: transparent; color: var(--blue); cursor: pointer; transition: all .15s; margin-left: 10px;
+    background: transparent; color: var(--blue); cursor: pointer; transition: all .15s; margin-left: 6px;
   }
   #timing-btn:hover { background: var(--blue); color: #000; }
   #timing-btn.active { background: var(--blue); color: #000; }
@@ -378,6 +384,7 @@
     <button class="flag-btn fcy"           data-flag="FCY"    onclick="setFlag(this)">FCY</button>
     <button class="flag-btn sc"            data-flag="SC"     onclick="setFlag(this)">SC</button>
     <button class="flag-btn red-f"         data-flag="RED"    onclick="setFlag(this)">RED</button>
+    <button id="drivers-btn" onclick="openDriverModal()">👤 DRIVERS</button>
     <button id="timing-btn" onclick="toggleTiming()">⏱ LIVE TIMING</button>
   </div>
 </div>
