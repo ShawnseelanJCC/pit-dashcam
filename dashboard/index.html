@@ -295,17 +295,8 @@
   #driver-select { font-family: var(--display); font-weight: 700; font-size: 15px; color: var(--blue); letter-spacing: 1px; background: transparent; border: none; cursor: pointer; padding: 0; max-width: 160px; }
   #driver-select:focus { outline: none; }
   #driver-select option { background: #111; color: var(--text); font-size: 13px; font-weight: 400; }
-  #driver-edit-btn { font-size: 11px; padding: 1px 4px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; border-radius: 2px; }
+  #driver-edit-btn { font-family: var(--display); font-size: 10px; font-weight: 700; letter-spacing: 1px; padding: 1px 6px; border: 1px solid var(--border); background: transparent; color: var(--label); cursor: pointer; border-radius: 2px; }
   #driver-edit-btn:hover { border-color: var(--blue); color: var(--blue); }
-  #driver-panel { display: none; position: absolute; bottom: 100%; left: 0; background: #1a1a1a; border: 1px solid var(--border); border-radius: 4px; padding: 8px; gap: 5px; flex-direction: column; z-index: 50; min-width: 200px; box-shadow: 0 -4px 12px rgba(0,0,0,0.6); }
-  #driver-panel.open { display: flex; }
-  #driver-add-input { font-family: var(--mono); font-size: 12px; color: var(--text); background: #0d0d0d; border: 1px solid var(--border); border-radius: 2px; padding: 3px 6px; width: 100%; box-sizing: border-box; }
-  #driver-add-input:focus { outline: none; border-color: var(--blue); }
-  #driver-panel button { font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 1px; padding: 3px 8px; cursor: pointer; border-radius: 2px; }
-  #driver-panel button:first-of-type { border: 1px solid var(--blue); background: transparent; color: var(--blue); }
-  #driver-panel button:first-of-type:hover { background: var(--blue); color: #000; }
-  #driver-del-btn { border: 1px solid var(--red) !important; color: var(--red) !important; background: transparent !important; }
-  #driver-del-btn:hover { background: var(--red) !important; color: #fff !important; }
 
   #fuel-section { min-width: 220px; }
   .fuel-bar-wrap { height: 8px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 4px 0; }
@@ -527,13 +518,7 @@
     <div class="bb-label">Driver / Stint</div>
     <div style="display:flex;gap:4px;align-items:center;">
       <select id="driver-select" onchange="selectDriver(this.value)"></select>
-      <button id="driver-edit-btn" onclick="toggleDriverPanel()" title="Add / remove drivers">✎</button>
-    </div>
-    <div id="driver-panel">
-      <input id="driver-add-input" type="text" placeholder="New driver name…" maxlength="24"
-             onkeydown="if(event.key==='Enter') addDriver()">
-      <button onclick="addDriver()">ADD</button>
-      <button id="driver-del-btn" onclick="deleteDriver()">DEL</button>
+      <button id="driver-edit-btn" onclick="openDriverModal()">EDIT</button>
     </div>
     <div class="bb-value" id="stint-timer">00:00:00</div>
   </div>
@@ -1016,35 +1001,65 @@ function selectDriver(name) {
   logEvent('Driver: ' + name, 'highlight');
 }
 
-function toggleDriverPanel() {
-  document.getElementById('driver-panel').classList.toggle('open');
+function openDriverModal() {
+  renderDriverModalList();
+  const bg = document.getElementById('driver-modal-bg');
+  bg.style.display = 'flex';
+  document.getElementById('driver-modal-input').value = '';
+  document.getElementById('driver-modal-input').focus();
 }
 
-function addDriver() {
-  const inp = document.getElementById('driver-add-input');
-  const name = inp.value.trim().toUpperCase();
-  if (!name) return;
-  if (!DRIVERS.includes(name)) {
-    DRIVERS.push(name);
-  }
-  state.driverIdx = DRIVERS.indexOf(name);
+function closeDriverModal() {
+  document.getElementById('driver-modal-bg').style.display = 'none';
+}
+
+function renderDriverModalList() {
+  const list = document.getElementById('driver-modal-list');
+  list.innerHTML = DRIVERS.map((d, i) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:4px 6px;background:#111;border-radius:3px;border:1px solid ${i===state.driverIdx?'var(--blue)':'#2a2a2a'};">
+      <span style="flex:1;font-family:var(--display);font-size:13px;font-weight:700;letter-spacing:1px;color:${i===state.driverIdx?'var(--blue)':'var(--text)'};">${d}</span>
+      <button onclick="selectDriverModal(${i})" style="font-size:10px;padding:2px 7px;border:1px solid var(--blue);background:${i===state.driverIdx?'var(--blue)':'transparent'};color:${i===state.driverIdx?'#000':'var(--blue)'};cursor:pointer;border-radius:2px;font-family:var(--display);font-weight:700;">SET</button>
+      <button onclick="deleteDriverModal(${i})" style="font-size:10px;padding:2px 7px;border:1px solid var(--red);background:transparent;color:var(--red);cursor:pointer;border-radius:2px;">✕</button>
+    </div>`
+  ).join('');
+}
+
+function selectDriverModal(idx) {
+  state.driverIdx = idx;
   rebuildDriverSelect();
-  document.getElementById('driver-select').value = name;
-  inp.value = '';
   updateFsDriver();
   startStintTimer();
-  logEvent('Driver: ' + name, 'highlight');
+  logEvent('Driver: ' + DRIVERS[idx], 'highlight');
+  renderDriverModalList();
 }
 
-function deleteDriver() {
+function deleteDriverModal(idx) {
   if (DRIVERS.length <= 1) { logEvent('Cannot remove last driver', 'warn'); return; }
-  const name = DRIVERS[state.driverIdx];
-  DRIVERS.splice(state.driverIdx, 1);
+  const name = DRIVERS[idx];
+  DRIVERS.splice(idx, 1);
   state.driverIdx = Math.min(state.driverIdx, DRIVERS.length - 1);
   rebuildDriverSelect();
   updateFsDriver();
   logEvent('Removed driver: ' + name, '');
+  renderDriverModalList();
 }
+
+function addDriverModal() {
+  const inp = document.getElementById('driver-modal-input');
+  const name = inp.value.trim().toUpperCase();
+  if (!name) return;
+  if (!DRIVERS.includes(name)) DRIVERS.push(name);
+  state.driverIdx = DRIVERS.indexOf(name);
+  rebuildDriverSelect();
+  updateFsDriver();
+  startStintTimer();
+  logEvent('Driver: ' + name, 'highlight');
+  inp.value = '';
+  renderDriverModalList();
+}
+
+function addDriver() {}
+function deleteDriver() {}
 
 function updateSignalBars(active) {
   for (let i = 1; i <= 5; i++) {
@@ -1335,5 +1350,20 @@ function renderLapLog() {
   }).join('');
 }
 </script>
+
+<!-- Driver management modal -->
+<div id="driver-modal-bg" onclick="if(event.target===this)closeDriverModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:20px;min-width:280px;max-width:360px;width:90%;">
+    <div style="font-family:var(--display);font-weight:700;font-size:14px;letter-spacing:2px;color:var(--text);margin-bottom:14px;">MANAGE DRIVERS</div>
+    <div id="driver-modal-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;max-height:200px;overflow-y:auto;"></div>
+    <div style="display:flex;gap:6px;margin-top:6px;">
+      <input id="driver-modal-input" type="text" placeholder="New driver name…" maxlength="24"
+             onkeydown="if(event.key==='Enter')addDriverModal()"
+             style="flex:1;font-family:var(--mono);font-size:13px;color:var(--text);background:#0d0d0d;border:1px solid #444;border-radius:3px;padding:5px 8px;">
+      <button onclick="addDriverModal()" style="font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:1px;padding:5px 10px;border:1px solid var(--green);background:transparent;color:var(--green);cursor:pointer;border-radius:3px;">ADD</button>
+    </div>
+    <button onclick="closeDriverModal()" style="margin-top:12px;width:100%;font-family:var(--display);font-weight:700;font-size:11px;letter-spacing:1px;padding:6px;border:1px solid #444;background:transparent;color:#888;cursor:pointer;border-radius:3px;">CLOSE</button>
+  </div>
+</div>
 </body>
 </html>
