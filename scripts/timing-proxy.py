@@ -14,7 +14,7 @@ from urllib.parse import quote
 from collections import deque
 
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, request
 import websocket
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -42,6 +42,30 @@ _state = {
     'last_update':  0,
 }
 _lock = threading.Lock()
+
+_sync = {
+    'raceStarted': False,
+    'raceStartTime': None,  # epoch float or None
+    'flag': 'GREEN',
+    'driverIdx': 0,
+    'fuelLitres': 45.0,
+    'lapCount': 0,
+    'lastLap': None,
+    'bestLap': None,
+}
+_sync_lock = threading.Lock()
+
+_sync = {
+    'raceStarted': False,
+    'raceStartTime': None,
+    'flag': 'GREEN',
+    'driverIdx': 0,
+    'fuelLitres': 45.0,
+    'lapCount': 0,
+    'lastLap': None,
+    'bestLap': None,
+}
+_sync_lock = threading.Lock()
 
 _FLAG_MAP = {
     'green':               'GREEN',
@@ -423,12 +447,44 @@ def api_debug():
     return cors(jsonify(msgs))
 
 
+@app.route('/timing/sync', methods=['GET'])
+def api_sync_get():
+    with _sync_lock:
+        return cors(jsonify(dict(_sync)))
+
+
+@app.route('/timing/sync', methods=['POST'])
+def api_sync_post():
+    body = request.get_json(silent=True) or {}
+    with _sync_lock:
+        for k, v in body.items():
+            if k in _sync:
+                _sync[k] = v
+        return cors(jsonify(dict(_sync)))
+
+
 @app.route('/timing/reset')
 def api_reset():
     with _lock:
         _state['laps'].clear()
         _state['current'].clear()
     return cors(jsonify({'ok': True}))
+
+
+@app.route('/timing/sync', methods=['GET'])
+def api_sync_get():
+    with _sync_lock:
+        return cors(jsonify(dict(_sync)))
+
+
+@app.route('/timing/sync', methods=['POST'])
+def api_sync_post():
+    data = request.get_json(silent=True) or {}
+    with _sync_lock:
+        for k in _sync:
+            if k in data:
+                _sync[k] = data[k]
+        return cors(jsonify(dict(_sync)))
 
 
 if __name__ == '__main__':

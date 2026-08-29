@@ -251,9 +251,11 @@
     cursor: pointer; border-radius: 2px; white-space: nowrap;
   }
   #timing-car-btn:hover { background: var(--blue); color: #000; }
-  #timing-status-row { font-family: var(--mono); font-size: 10px; color: var(--label); margin-bottom: 6px; }
-  #timing-status-row .ts-on  { color: var(--green); }
-  #timing-status-row .ts-off { color: var(--dim); }
+  #timing-status-row, #sync-status-row { font-family: var(--mono); font-size: 10px; color: var(--label); margin-bottom: 6px; }
+  #timing-status-row .ts-on, #sync-status-row .ts-on  { color: var(--green); }
+  #timing-status-row .ts-off, #sync-status-row .ts-off { color: var(--dim); }
+  .sync-mode-btn { font-family: var(--display); font-weight: 700; font-size: 10px; letter-spacing: 1px; padding: 3px 8px; border: 1px solid var(--border); background: transparent; color: var(--label); cursor: pointer; border-radius: 2px; flex: 1; }
+  .sync-mode-btn.active { border-color: var(--green); color: var(--green); background: rgba(0,200,100,0.08); }
   #timing-live-data { display: none; margin-top: 8px; }
   #timing-live-data .tld-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px 4px; margin-bottom: 8px; }
   #timing-live-data .tld-item { font-family: var(--mono); }
@@ -479,6 +481,21 @@
       </div>
     </div>
     <div class="sb-section">
+      <div class="sb-title">Weather — Sepang</div>
+      <div id="weather-display" style="font-family:var(--mono);font-size:18px;color:var(--text);margin:4px 0;">--°C</div>
+      <div id="weather-detail" style="font-size:10px;color:var(--label);letter-spacing:1px;">FETCHING…</div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-title">Multi-Device Sync</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <button id="sync-off-btn"    class="sync-mode-btn active" onclick="setSyncMode('off')">OFF</button>
+        <button id="sync-master-btn" class="sync-mode-btn"        onclick="setSyncMode('master')">MASTER</button>
+        <button id="sync-viewer-btn" class="sync-mode-btn"        onclick="setSyncMode('viewer')">VIEWER</button>
+      </div>
+      <div id="sync-status-row"><span class="ts-off">⬤</span> <span id="sync-status-text">off — select MASTER or VIEWER</span></div>
+      <div style="font-size:9px;color:var(--label);margin-top:4px;line-height:1.4;">MASTER pushes state to server.<br>VIEWER reads and follows master.</div>
+    </div>
+    <div class="sb-section">
       <div class="sb-title">Stream Info</div>
       <div id="conn-status">OFFLINE</div>
       <div class="stat-grid">
@@ -579,6 +596,7 @@ const state = {
   driverIdx: 0, stintStartTime: null, stintHandle: null,
   eventLog: [], hls: null, statsHandle: null, fuelWarned: false,
   recording: false, recorder: null, recordChunks: [], recordStartTime: null, recordHandle: null,
+  syncMode: 'off', syncHandle: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -586,7 +604,105 @@ document.addEventListener('DOMContentLoaded', () => {
   rebuildDriverSelect();
   updateFuelDisplay();
   logEvent('System ready', '');
+  fetchWeather();
+  setInterval(fetchWeather, 5 * 60 * 1000);
 });
+
+// ── Weather ──────────────────────────────────────────────────────────────────
+const WX_CODES = {0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Fog',51:'Drizzle',53:'Drizzle',55:'Drizzle',61:'Rain',63:'Rain',65:'Heavy rain',71:'Snow',73:'Snow',75:'Snow',80:'Showers',81:'Showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm'};
+async function fetchWeather() {
+  try {
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=2.7602&longitude=101.7385&current=temperature_2m,precipitation,weathercode&timezone=Asia%2FKuala_Lumpur');
+    const d = await r.json();
+    const c = d.current;
+    const rain = c.precipitation > 0;
+    const icon = rain ? '🌧' : (c.weathercode >= 80 ? '⛅' : (c.weathercode >= 3 ? '☁' : '☀'));
+    document.getElementById('weather-display').textContent = Math.round(c.temperature_2m) + '°C ' + icon;
+    document.getElementById('weather-detail').textContent = (WX_CODES[c.weathercode] || 'Unknown') + (rain ? ' · ' + c.precipitation.toFixed(1) + 'mm' : '');
+  } catch(e) {
+    document.getElementById('weather-display').textContent = '--°C';
+    document.getElementById('weather-detail').textContent = 'unavailable';
+  }
+}
+
+// ── Multi-device sync ─────────────────────────────────────────────────────────
+function setSyncMode(mode) {
+  state.syncMode = mode;
+  if (state.syncHandle) { clearInterval(state.syncHandle); state.syncHandle = null; }
+  document.querySelectorAll('.sync-mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sync-' + mode + '-btn').classList.add('active');
+  const statusDot = document.querySelector('#sync-status-row span:first-child');
+  const statusTxt = document.getElementById('sync-status-text');
+  if (mode === 'off') {
+    statusDot.className = 'ts-off'; statusTxt.textContent = 'off — select MASTER or VIEWER';
+  } else if (mode === 'master') {
+    statusDot.className = 'ts-on'; statusTxt.textContent = 'master — pushing state';
+    state.syncHandle = setInterval(pushSync, 3000);
+    pushSync();
+  } else {
+    statusDot.className = 'ts-on'; statusTxt.textContent = 'viewer — following master';
+    state.syncHandle = setInterval(pullSync, 3000);
+    pullSync();
+  }
+}
+
+function buildSyncPayload() {
+  return {
+    raceStarted: state.raceStarted,
+    raceStartTime: state.raceStartTime,
+    flag: document.querySelector('.flag-btn.active') ? document.querySelector('.flag-btn.active').dataset.flag : 'GREEN',
+    driverIdx: state.driverIdx,
+    fuelLitres: state.fuelLitres,
+    lapCount: state.lapCount,
+    lastLap: document.getElementById('last-lap').textContent,
+    bestLap: document.getElementById('best-lap').textContent,
+  };
+}
+
+async function pushSync() {
+  try {
+    await fetch('/timing/sync', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(buildSyncPayload()) });
+  } catch(e) {}
+}
+
+async function pullSync() {
+  try {
+    const r = await fetch('/timing/sync');
+    const d = await r.json();
+    // Apply remote state
+    if (d.flag) {
+      document.querySelectorAll('.flag-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.flag === d.flag);
+      });
+      document.getElementById('top-bar').className = 'flag-' + d.flag.toLowerCase();
+    }
+    if (typeof d.driverIdx === 'number' && d.driverIdx !== state.driverIdx) {
+      state.driverIdx = d.driverIdx;
+      rebuildDriverSelect();
+      updateFsDriver();
+    }
+    if (typeof d.fuelLitres === 'number') {
+      state.fuelLitres = d.fuelLitres;
+      updateFuelDisplay();
+    }
+    if (typeof d.lapCount === 'number') {
+      state.lapCount = d.lapCount;
+      document.getElementById('lap-count').textContent = d.lapCount;
+    }
+    if (d.lastLap) document.getElementById('last-lap').textContent = d.lastLap;
+    if (d.bestLap) document.getElementById('best-lap').textContent = d.bestLap;
+    if (typeof d.raceStarted === 'boolean') {
+      if (d.raceStarted && !state.raceStarted) {
+        state.raceStarted = true;
+        state.raceStartTime = d.raceStartTime;
+        if (!state.raceTimerHandle) state.raceTimerHandle = setInterval(tickRaceTimer, 500);
+      } else if (!d.raceStarted && state.raceStarted) {
+        state.raceStarted = false;
+        if (state.raceTimerHandle) { clearInterval(state.raceTimerHandle); state.raceTimerHandle = null; }
+      }
+    }
+  } catch(e) {}
+}
 
 function connectStream() {
   const url = document.getElementById('url-input').value.trim();
