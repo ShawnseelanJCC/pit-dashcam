@@ -396,6 +396,15 @@
       </div>
     </div>
     <div class="sb-section">
+      <div class="sb-title">Live Timing Sync</div>
+      <div id="timing-car-row">
+        <input id="timing-car-input" type="text" placeholder="Car NR e.g. 512" maxlength="6"
+               onkeydown="if(event.key==='Enter') toggleTimingFeed()">
+        <button id="timing-car-btn" onclick="toggleTimingFeed()">SYNC</button>
+      </div>
+      <div id="timing-status-row"><span class="ts-off">⬤</span> <span id="timing-status-text">off — enter car number</span></div>
+    </div>
+    <div class="sb-section">
       <div class="sb-title">Stream Info</div>
       <div id="conn-status">OFFLINE</div>
       <div class="stat-grid">
@@ -407,12 +416,6 @@
     </div>
     <div class="sb-section" style="flex:1; overflow-y:auto;">
       <div class="sb-title">Lap Log</div>
-      <div id="timing-car-row">
-        <input id="timing-car-input" type="text" placeholder="Car NR e.g. 512" maxlength="6"
-               onkeydown="if(event.key==='Enter') toggleTimingFeed()">
-        <button id="timing-car-btn" onclick="toggleTimingFeed()">SYNC</button>
-      </div>
-      <div id="timing-status-row"><span class="ts-off">⬤</span> Live timing — <span id="timing-status-text">off</span></div>
       <table id="lap-log-table">
         <thead><tr><th>LAP</th><th>TIME</th><th>DURATION</th><th>DELTA</th></tr></thead>
         <tbody id="lap-log-body"></tbody>
