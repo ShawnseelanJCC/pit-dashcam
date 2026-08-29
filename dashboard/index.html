@@ -298,7 +298,10 @@
   #fuel-section { min-width: 220px; }
   .fuel-bar-wrap { height: 8px; background: var(--border); border-radius: 2px; overflow: hidden; margin: 4px 0; }
   #fuel-bar { height: 100%; width: 100%; background: var(--green); transition: width .4s, background .4s; border-radius: 2px; }
-  .fuel-controls { display: flex; gap: 4px; align-items: center; }
+  .fuel-controls { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  #refuel-litres { font-family: var(--mono); font-size: 13px; color: var(--text); background: #0d0d0d; border: 1px solid var(--border); border-radius: 2px; width: 46px; text-align: center; padding: 2px 3px; -moz-appearance: textfield; }
+  #refuel-litres::-webkit-inner-spin-button, #refuel-litres::-webkit-outer-spin-button { -webkit-appearance: none; }
+  #refuel-litres:focus { outline: none; border-color: var(--green); }
   .fuel-val { font-family: var(--mono); font-size: 13px; color: var(--text); min-width: 80px; }
   .fuel-val.critical { color: var(--red); animation: pulse 1s infinite; }
   .fuel-setup { display: flex; gap: 10px; align-items: center; margin-bottom: 2px; }
@@ -530,7 +533,9 @@
     </div>
     <div class="fuel-controls">
       <div class="fuel-val" id="fuel-pct">45L (100%)</div>
-      <button id="refuel-btn" onclick="refuel()">REFUEL</button>
+      <input id="refuel-litres" type="number" placeholder="L" min="0.1" max="200" step="0.5"
+             onkeydown="if(event.key==='Enter') refuel()">
+      <button id="refuel-btn" onclick="refuel()">ADD</button>
     </div>
     <div class="fuel-bar-wrap"><div id="fuel-bar"></div></div>
   </div>
@@ -744,8 +749,19 @@ function setLPerLap(val) {
 }
 
 function refuel() {
-  state.fuelLitres = state.tankSize; state.fuelWarned = false;
-  updateFuelDisplay(); logEvent('Refuel — ' + state.tankSize + 'L', 'highlight');
+  const input = document.getElementById('refuel-litres');
+  const added = parseFloat(input && input.value);
+  if (!isNaN(added) && added > 0) {
+    const before = state.fuelLitres;
+    state.fuelLitres = Math.min(state.tankSize, state.fuelLitres + added);
+    logEvent('Refuel +' + added.toFixed(1) + 'L → ' + state.fuelLitres.toFixed(1) + 'L', 'highlight');
+    if (input) input.value = '';
+  } else {
+    state.fuelLitres = state.tankSize;
+    logEvent('Refuel — full ' + state.tankSize + 'L', 'highlight');
+  }
+  state.fuelWarned = false;
+  updateFuelDisplay();
 }
 
 function updateFuelDisplay() {
