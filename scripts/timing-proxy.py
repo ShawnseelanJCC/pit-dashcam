@@ -233,6 +233,13 @@ def process_entry(entry):
     lap_num   = (entry.get('LAP') or entry.get('lap') or entry.get('lapCount') or
                  entry.get('LapCount'))
 
+    # Extract driver name(s) — try every plausible field name
+    driver_raw = (entry.get('DRIVER') or entry.get('driver') or entry.get('Driver') or
+                  entry.get('NAME') or entry.get('name') or entry.get('driverName') or
+                  entry.get('DriverName') or entry.get('pilot') or entry.get('Pilot'))
+    drivers_list_raw = (entry.get('DRIVERS') or entry.get('drivers') or
+                        entry.get('Drivers') or entry.get('pilots') or entry.get('Pilots'))
+
     # Store current race data regardless
     with _lock:
         pos = entry.get('POS') or entry.get('pos')
@@ -254,6 +261,20 @@ def process_entry(entry):
             's4':        entry.get('SECT-4') or entry.get('s4'),
         }
         _state['last_update'] = time.time()
+
+        # Accumulate driver names for this car
+        existing = _state.setdefault('drivers', {}).setdefault(car, [])
+        if drivers_list_raw and isinstance(drivers_list_raw, list):
+            for d in drivers_list_raw:
+                name = str(d).strip().upper()
+                if name and name not in existing:
+                    existing.append(name)
+                    log.info(f'Car {car} driver from list: {name}')
+        elif driver_raw:
+            name = str(driver_raw).strip().upper()
+            if name and name not in existing:
+                existing.append(name)
+                log.info(f'Car {car} driver: {name}')
 
     if not lap_time:
         return
@@ -422,12 +443,16 @@ def api_car(car_number):
                     break
         current['gap_behind'] = gap_behind
 
+    with _lock:
+        car_drivers = list(_state.get('drivers', {}).get(car, []))
+
     return cors(jsonify({
         'car':       car,
         'connected': connected,
         'current':   current,
         'session':   session,
         'laps':      laps,
+        'drivers':   car_drivers,
     }))
 
 
@@ -462,6 +487,15 @@ def api_sync_post():
             if k in _sync:
                 _sync[k] = v
         return cors(jsonify(dict(_sync)))
+
+
+@app.route('/timing/drivers/<car_number>')
+def api_drivers(car_number):
+    car = car_number.upper().strip()
+    with _lock:
+        names = list(_state.get('drivers', {}).get(car, []))
+        all_cars = {c: list(v) for c, v in _state.get('drivers', {}).items()}
+    return cors(jsonify({'car': car, 'drivers': names, 'all': all_cars}))
 
 
 @app.route('/timing/reset')
