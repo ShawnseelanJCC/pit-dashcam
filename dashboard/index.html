@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=1280, initial-scale=1.0, minimum-scale=0.25">
+<meta name="viewport" content="width=1024, initial-scale=1.0, minimum-scale=0.2, maximum-scale=3.0, user-scalable=yes">
 <title>JRT PitCam</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -360,6 +360,43 @@
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Landscape / small-height screens ─────────────────────────────────── */
+  @media (max-height: 520px) {
+    body { grid-template-rows: 38px 1fr 74px; }
+
+    #topbar { padding: 0 6px; gap: 6px; }
+    .logo { font-size: 16px; }
+    .top-stat .value { font-size: 13px; }
+    .top-stat .value.big { font-size: 15px; }
+    .top-stat .label { font-size: 8px; }
+    .flag-btn { font-size: 9px; padding: 3px 6px; }
+    #drivers-btn, #timing-btn { font-size: 9px; padding: 3px 7px; }
+
+    .bb-section { padding: 4px 8px; gap: 2px; }
+    .bb-label { font-size: 8px; }
+    .bb-value { font-size: 11px; }
+    #signal-section { min-width: 60px; }
+    .signal-bars { height: 18px; }
+    .bar:nth-child(5) { height: 18px; }
+    .bar:nth-child(4) { height: 14px; }
+    .bar:nth-child(3) { height: 10px; }
+    .bar:nth-child(2) { height: 7px; }
+    #stint-section { min-width: 130px; }
+    #driver-select { font-size: 12px; }
+    #fuel-section { min-width: 190px; }
+    .fuel-setup { gap: 6px; }
+    .fuel-setup-label { font-size: 8px; }
+    .fuel-setup-input { font-size: 11px; width: 40px; }
+    .fuel-btn { font-size: 11px; padding: 1px 4px; }
+    .fuel-val { font-size: 11px; min-width: 60px; }
+    .fuel-bar-wrap { height: 5px; margin: 2px 0; }
+    #lap-btn, #record-btn { font-size: 11px; padding: 5px 8px; }
+    #record-timer { font-size: 9px; }
+    #pit-notes { height: 48px; font-size: 11px; }
+    #event-log { height: 48px; font-size: 9px; }
+    #log-section { min-width: 180px; }
+  }
 </style>
 </head>
 <body>
