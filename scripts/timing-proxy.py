@@ -374,28 +374,109 @@ def lz_decode(data):
     return None
 
 
+# Per-car last t_p timestamp for delta-based lap time computation
+_last_tp_ts = {}   # car_nr -> last raw timestamp (index 7)
+_last_tp_lap = {}  # car_nr -> last lap count seen
+
+
+def process_t_p(rows):
+    """Handle transponder-passing rows from live.timing.asia.
+    Format: [transponder_id, car_nr_str, time1, time2, lap_count, gap, is_pit, timestamp_100ns]
+    """
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 5:
+            continue
+        try:
+            car = str(row[1]).strip().upper() if row[1] is not None else None
+            if not car:
+                continue
+            lap_count = int(row[4]) if row[4] is not None else None
+            gap_raw   = row[5] if len(row) > 5 else None
+            is_pit    = bool(row[6]) if len(row) > 6 else False
+            ts_raw    = row[7] if len(row) > 7 else None  # 100ns ticks or similar
+
+            # Compute lap time from timestamp delta between consecutive t_p for same car
+            lap_time_str = None
+            prev_ts = _last_tp_ts.get(car)
+            prev_lap = _last_tp_lap.get(car)
+            if ts_raw is not None and prev_ts is not None and lap_count is not None and prev_lap is not None:
+                if lap_count != prev_lap:
+                    # 841442093492000 → likely 100-nanosecond ticks (FILETIME-style)
+                    delta_ticks = ts_raw - prev_ts
+                    delta_secs  = abs(delta_ticks) / 10_000_000  # 100ns → seconds
+                    if 30 < delta_secs < 600:  # sanity: 30s–10min lap
+                        m   = int(delta_secs // 60)
+                        s   = delta_secs % 60
+                        lap_time_str = f'{m}:{s:06.3f}'
+            if ts_raw is not None:
+                _last_tp_ts[car] = ts_raw
+            if lap_count is not None:
+                _last_tp_lap[car] = lap_count
+
+            # Format gap
+            gap_str = None
+            if gap_raw is not None:
+                try:
+                    g = float(gap_raw) / 10_000_000
+                    if 0 < g < 3600:
+                        gap_str = f'+{g:.3f}'
+                except Exception:
+                    pass
+
+            with _lock:
+                cur = _state['current'].setdefault(car, {})
+                if lap_count is not None:
+                    cur['lap'] = lap_count
+                if gap_str:
+                    cur['gap'] = gap_str
+                cur['pit'] = is_pit
+                _state['last_update'] = time.time()
+
+                if lap_time_str and lap_count is not None:
+                    laps = _state['laps'].setdefault(car, [])
+                    if not laps or laps[-1].get('time') != lap_time_str:
+                        laps.append({
+                            'lap':   lap_count,
+                            'time':  lap_time_str,
+                            '_secs': None,
+                            'best':  False,
+                            'delta': '',
+                            'gap':   gap_str or '',
+                        })
+                        log.info(f't_p car={car} lap={lap_count} time={lap_time_str} gap={gap_str}')
+        except Exception as e:
+            log.debug(f'process_t_p row error: {e}')
+
+
 def dispatch_lz(handle, data):
     """Recursively dispatch a live.timing.asia [handle, data] pair."""
     if handle in ('$_Reload', '$_Reconnect'):
         log.warning(f'Server sent {handle} — auth token likely missing or expired')
         return
-    if handle == 's_t' or handle == 's_i':
+    if handle in ('s_t', 's_i'):
         return  # server time sync, ignore
 
     if not isinstance(data, str):
-        # Already decoded — treat as a regular data object
+        # Already decoded list/dict — route by handle type
+        if handle == 't_p':
+            process_t_p(data if isinstance(data, list) else [data])
+            return
+        # Generic fallback
         dispatch(data)
         return
 
     # Data is LZString-compressed
     decoded = lz_decode(data)
     if decoded is None:
-        # Not LZ — might be a plain value or "OK<timestamp>"
-        if isinstance(data, str) and data.startswith('OK'):
-            return
         return
 
     log.info(f'LZ decoded handle="{handle}" → {len(decoded) if isinstance(decoded, list) else type(decoded).__name__}')
+
+    if handle == 't_p':
+        process_t_p(decoded if isinstance(decoded, list) else [decoded])
+        return
 
     if isinstance(decoded, list):
         # Array of [handle, value] pairs — process in reverse (like JS while(di--))
