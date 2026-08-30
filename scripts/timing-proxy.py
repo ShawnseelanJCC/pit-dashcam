@@ -353,18 +353,79 @@ def dispatch(data):
         for item in data:
             dispatch(item)
     elif isinstance(data, dict):
-        # Some timing systems nest entries under keys like 'Entries', 'Cars', 'Results', etc.
+        # Nested entry lists
         for key in ('Entries', 'entries', 'Cars', 'cars', 'Results', 'results',
                     'Competitors', 'competitors', 'Drivers', 'Standing', 'standing'):
             if key in data and isinstance(data[key], list):
                 log.info(f'Dispatching nested list under "{key}" ({len(data[key])} items)')
                 for item in data[key]:
                     process_entry(item)
-                # Also process session-level fields from the wrapper
                 process_session(data)
                 return
-        # Plain entry dict
         process_entry(data)
+
+
+try:
+    import lzstring as _lzmod
+    _LZ = _lzmod.LZString()
+    log.info('lzstring available — LZ decompression enabled')
+except ImportError:
+    _LZ = None
+    log.warning('lzstring not installed — live.timing.asia data will be unreadable. Run: pip install lzstring')
+
+
+def lz_decode(data):
+    """Decode a live.timing.asia LZString-UTF16-compressed data string.
+    Returns a Python object (list/dict) or None on failure."""
+    if not isinstance(data, str) or not data:
+        return None
+    # Strip optional ::hexTimestamp suffix
+    ti = data.rfind('::')
+    if ti != -1:
+        data = data[:ti]
+    if not _LZ:
+        return None
+    try:
+        decompressed = _LZ.decompressFromUTF16(data)
+        if decompressed:
+            return json.loads(decompressed)
+    except Exception as e:
+        log.debug(f'lz_decode error: {e}')
+    return None
+
+
+def dispatch_lz(handle, data):
+    """Recursively dispatch a live.timing.asia [handle, data] pair."""
+    if handle in ('$_Reload', '$_Reconnect'):
+        log.warning(f'Server sent {handle} — auth token likely missing or expired')
+        return
+    if handle == 's_t' or handle == 's_i':
+        return  # server time sync, ignore
+
+    if not isinstance(data, str):
+        # Already decoded — treat as a regular data object
+        dispatch(data)
+        return
+
+    # Data is LZString-compressed
+    decoded = lz_decode(data)
+    if decoded is None:
+        # Not LZ — might be a plain value or "OK<timestamp>"
+        if isinstance(data, str) and data.startswith('OK'):
+            return
+        return
+
+    log.info(f'LZ decoded handle="{handle}" → {len(decoded) if isinstance(decoded, list) else type(decoded).__name__}')
+
+    if isinstance(decoded, list):
+        # Array of [handle, value] pairs — process in reverse (like JS while(di--))
+        for item in reversed(decoded):
+            if isinstance(item, list) and len(item) >= 2:
+                dispatch_lz(item[0], item[1])
+            elif isinstance(item, dict):
+                dispatch(item)
+    elif isinstance(decoded, dict):
+        dispatch(decoded)
 
 
 def on_message(ws, raw):
@@ -373,36 +434,34 @@ def on_message(ws, raw):
     except Exception:
         return
 
+    # Store last 200 raw messages for /timing/debug
     with _lock:
         _state['raw_msgs'].append({'t': time.time(), 'msg': msg})
 
-    # R = response to a hub method invocation (initial state snapshot)
+    # R = response to a hub method invocation
     r_data = msg.get('R')
     if r_data:
-        log.info('Received R (state snapshot) — dispatching')
-        dispatch(r_data)
+        if isinstance(r_data, str):
+            dispatch_lz('_', r_data)
+        else:
+            dispatch(r_data)
 
-    # M = server-push messages
+    # M = server-push messages (live.timing.asia uses ["handle", lzData] list format)
     messages = msg.get('M', [])
     for m in messages:
-        if isinstance(m, dict):
-            # Hub message: {"H":"hub","M":"method","A":[args]}
+        if isinstance(m, list) and len(m) >= 2:
+            dispatch_lz(m[0], m[1])
+        elif isinstance(m, dict):
             method = m.get('M', '')
-            args = m.get('A', [])
-            if method == '$_Reload':
-                log.warning('Server sent $_Reload — token may be invalid, will reconnect')
-                return
-            if args:
-                dispatch(args[0] if len(args) == 1 else args)
-        elif isinstance(m, list):
-            # Array format: ["methodName", data]
-            if len(m) >= 1:
-                method = m[0] if isinstance(m[0], str) else ''
-                if method == '$_Reload':
-                    log.warning('Server sent $_Reload (list format) — auth token missing')
-                    return
-                if len(m) >= 2 and m[1] is not None:
-                    dispatch(m[1])
+            args   = m.get('A', [])
+            if method in ('$_Reload', '$_Reconnect'):
+                log.warning(f'Server sent {method}')
+                continue
+            for a in args:
+                if isinstance(a, str):
+                    dispatch_lz(method, a)
+                else:
+                    dispatch(a)
         elif isinstance(m, str):
             try:
                 dispatch(json.loads(m))
