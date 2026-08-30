@@ -25,7 +25,7 @@ app = Flask(__name__)
 BASE_URL  = 'https://live.timing.asia'
 VENUE     = 'sepang'
 HUB_PATH  = '/lt'
-TKDM      = '54561'   # Sepang venue ID — update if they change it
+TKDM      = '336813'  # fetched dynamically from page; this is the fallback
 
 _state = {
     'connected':    False,
@@ -104,49 +104,29 @@ _session = requests.Session()
 _session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
 
 def fetch_token():
-    """Get _tk auth token — tries page HTML, cookies, and JS bundle."""
+    """Get _tk token and _tkdm from LiveTimingApp constructor in page HTML."""
+    global TKDM
     try:
         r = _session.get(f'{BASE_URL}/{VENUE}', timeout=10,
-                         headers={'Referer': BASE_URL})
+                         headers={'Referer': BASE_URL,
+                                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
 
-        # 1. Check cookies set by the server
-        for name, value in _session.cookies.items():
-            if re.match(r'^[a-f0-9]{32}$', value, re.IGNORECASE):
-                log.info(f'Token from cookie "{name}": {value[:8]}…')
-                return value
-            if '_tk' in name.lower() or 'token' in name.lower():
-                log.info(f'Token from cookie "{name}": {value[:8]}…')
-                return value
-
-        # 2. Search page HTML
-        for pattern in [
-            r'["\']_tk["\']\s*[,:]\s*["\']([a-f0-9]{32})["\']',
-            r'\btk\b\s*[:=]\s*["\']([a-f0-9]{32})["\']',
-            r'authToken\s*[:=]\s*["\']([a-f0-9]{32})["\']',
-            r'token\s*[:=]\s*["\']([a-f0-9]{32})["\']',
-            r'"tk"\s*:\s*"([a-f0-9]{32})"',
-            r"'tk'\s*:\s*'([a-f0-9]{32})'",
-        ]:
-            m = re.search(pattern, r.text, re.IGNORECASE)
-            if m:
-                log.info(f'Token from HTML: {m.group(1)[:8]}…')
-                return m.group(1)
-
-        # 3. Try fetching any linked JS bundles and searching those
-        js_urls = re.findall(r'src=["\']([^"\']*\.js[^"\']*)["\']', r.text)
-        for js_url in js_urls[:5]:
-            if not js_url.startswith('http'):
-                js_url = BASE_URL + '/' + js_url.lstrip('/')
+        # LiveTimingApp({"n":"sepang","tid":"<token>","m":[...],"dm":"<dataMark>",...})
+        m = re.search(r'LiveTimingApp\((\{[^)]+\})\)', r.text)
+        if m:
             try:
-                js_r = _session.get(js_url, timeout=8)
-                m = re.search(r'["\']([a-f0-9]{32})["\']', js_r.text)
-                if m:
-                    log.info(f'Token from JS bundle: {m.group(1)[:8]}…')
-                    return m.group(1)
-            except Exception:
-                pass
+                cfg = json.loads(m.group(1))
+                tid = cfg.get('tid', '')
+                dm  = cfg.get('dm', '')
+                if tid:
+                    log.info(f'Token from LiveTimingApp: {tid[:8]}… dm={dm}')
+                    if dm:
+                        TKDM = dm
+                    return tid
+            except Exception as je:
+                log.warning(f'LiveTimingApp JSON parse error: {je}')
 
-        log.warning('Token not found — connecting without (data may be limited)')
+        log.warning('Token not found in page — connecting without (expect $_Reload)')
         return ''
     except Exception as e:
         log.error(f'fetch_token: {e}')
