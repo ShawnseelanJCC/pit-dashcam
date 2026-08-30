@@ -381,7 +381,7 @@ _last_tp_lap = {}  # car_nr -> last lap count seen
 
 def process_t_p(rows):
     """Handle transponder-passing rows from live.timing.asia.
-    Format: [transponder_id, car_nr_str, time1, time2, lap_count, gap, is_pit, timestamp_100ns]
+    Format: [transponder_id, car_nr_str, time1_ms, time2_ms, lap_count, gap_ms, is_pit, timestamp_ms]
     """
     if not isinstance(rows, list):
         return
@@ -395,31 +395,36 @@ def process_t_p(rows):
             lap_count = int(row[4]) if row[4] is not None else None
             gap_raw   = row[5] if len(row) > 5 else None
             is_pit    = bool(row[6]) if len(row) > 6 else False
-            ts_raw    = row[7] if len(row) > 7 else None  # 100ns ticks or similar
+            ts_raw    = row[7] if len(row) > 7 else None
+
+            log.info(f't_p raw car={car} fields={row}')
 
             # Compute lap time from timestamp delta between consecutive t_p for same car
             lap_time_str = None
-            prev_ts = _last_tp_ts.get(car)
+            prev_ts  = _last_tp_ts.get(car)
             prev_lap = _last_tp_lap.get(car)
             if ts_raw is not None and prev_ts is not None and lap_count is not None and prev_lap is not None:
                 if lap_count != prev_lap:
-                    # 841442093492000 → likely 100-nanosecond ticks (FILETIME-style)
-                    delta_ticks = ts_raw - prev_ts
-                    delta_secs  = abs(delta_ticks) / 10_000_000  # 100ns → seconds
-                    if 30 < delta_secs < 600:  # sanity: 30s–10min lap
-                        m   = int(delta_secs // 60)
-                        s   = delta_secs % 60
-                        lap_time_str = f'{m}:{s:06.3f}'
+                    delta_raw = ts_raw - prev_ts
+                    # Try multiple unit interpretations: ms, 100ns ticks, 10ms ticks
+                    for divisor, label in [(1000, 'ms'), (10_000_000, '100ns'), (100, '10ms')]:
+                        delta_secs = abs(delta_raw) / divisor
+                        if 30 < delta_secs < 600:
+                            m = int(delta_secs // 60)
+                            s = delta_secs % 60
+                            lap_time_str = f'{m}:{s:06.3f}'
+                            log.info(f't_p lap time {label}: {lap_time_str} (delta={delta_raw})')
+                            break
             if ts_raw is not None:
                 _last_tp_ts[car] = ts_raw
             if lap_count is not None:
                 _last_tp_lap[car] = lap_count
 
-            # Format gap
+            # Gap: try ms → seconds
             gap_str = None
             if gap_raw is not None:
                 try:
-                    g = float(gap_raw) / 10_000_000
+                    g = float(gap_raw) / 1000.0  # ms to seconds
                     if 0 < g < 3600:
                         gap_str = f'+{g:.3f}'
                 except Exception:
