@@ -1492,17 +1492,29 @@ async function pollTimingProxy() {
       document.getElementById('last-lap').textContent = cur.last;
     }
 
-    if (!data.laps || data.laps.length === 0) return;
-
+    // ── Inject laps from proxy's accumulated list ──
     let added = 0;
-    for (const lap of data.laps) {
-      const key = String(lap.lap);
-      if (timingState.knownLaps.has(key)) continue;
-      timingState.knownLaps.add(key);
-      injectTimingLap(lap, car);
-      added++;
+    if (data.laps && data.laps.length > 0) {
+      for (const lap of data.laps) {
+        const key = String(lap.lap) + '|' + (lap.time || '');
+        if (timingState.knownLaps.has(key)) continue;
+        timingState.knownLaps.add(key);
+        injectTimingLap(lap, car);
+        added++;
+      }
+      if (added > 0) renderLapLog();
     }
-    if (added > 0) renderLapLog();
+
+    // ── Fallback: show current last/best from live feed if no laps yet ──
+    if (state.lapTimes.length === 0 && cur.last && cur.last !== '—') {
+      const syntheticKey = 'cur|' + cur.last;
+      if (!timingState.knownLaps.has(syntheticKey)) {
+        timingState.knownLaps.add(syntheticKey);
+        const synLap = { lap: cur.lap || '?', time: cur.last, delta: cur.best && cur.last === cur.best ? 'BEST' : '' };
+        injectTimingLap(synLap, car);
+        renderLapLog();
+      }
+    }
 
   } catch (e) {
     setTimingStatus('proxy unreachable — is it running?', false);

@@ -317,11 +317,22 @@ def process_entry(entry):
 
 
 def dispatch(data):
-    """Route parsed data to process_entry."""
+    """Route parsed data to process_entry. Handles list, dict, and nested shapes."""
     if isinstance(data, list):
         for item in data:
-            process_entry(item)
+            dispatch(item)
     elif isinstance(data, dict):
+        # Some timing systems nest entries under keys like 'Entries', 'Cars', 'Results', etc.
+        for key in ('Entries', 'entries', 'Cars', 'cars', 'Results', 'results',
+                    'Competitors', 'competitors', 'Drivers', 'Standing', 'standing'):
+            if key in data and isinstance(data[key], list):
+                log.info(f'Dispatching nested list under "{key}" ({len(data[key])} items)')
+                for item in data[key]:
+                    process_entry(item)
+                # Also process session-level fields from the wrapper
+                process_session(data)
+                return
+        # Plain entry dict
         process_entry(data)
 
 
@@ -334,10 +345,14 @@ def on_message(ws, raw):
     with _lock:
         _state['raw_msgs'].append({'t': time.time(), 'msg': msg})
 
-    messages = msg.get('M', [])
-    if not messages:
-        return
+    # R = response to a hub method invocation (initial state snapshot)
+    r_data = msg.get('R')
+    if r_data:
+        log.info('Received R (state snapshot) — dispatching')
+        dispatch(r_data)
 
+    # M = server-push messages
+    messages = msg.get('M', [])
     for m in messages:
         if isinstance(m, dict):
             # Hub message: {"H":"hub","M":"method","A":[args]}
@@ -345,7 +360,6 @@ def on_message(ws, raw):
             if args:
                 dispatch(args[0] if len(args) == 1 else args)
         elif isinstance(m, str):
-            # Persistent connection raw string
             try:
                 dispatch(json.loads(m))
             except Exception:
@@ -384,6 +398,28 @@ def _connect():
             _state['connected'] = True
         log.info('WebSocket connected')
         send_start(tk, token)
+        # Invoke hub methods to request full current state from server.
+        # Try several common method/hub name combinations used by live timing SignalR hubs.
+        hub_candidates = [
+            {'H': 'lthub',    'M': 'Subscribe',       'A': [], 'I': 1},
+            {'H': 'lthub',    'M': 'GetCurrentState',  'A': [], 'I': 2},
+            {'H': 'lthub',    'M': 'Start',            'A': [], 'I': 3},
+            {'H': 'timinghub','M': 'Subscribe',        'A': [], 'I': 4},
+            {'H': 'timinghub','M': 'GetCurrentState',  'A': [], 'I': 5},
+            {'H': 'hub',      'M': 'Subscribe',        'A': [], 'I': 6},
+        ]
+        import threading as _t
+        def _send_subscribes():
+            import time as _time
+            _time.sleep(1)   # wait for start handshake to complete
+            for payload in hub_candidates:
+                try:
+                    ws.send(json.dumps(payload))
+                    log.info(f'Sent hub invoke: {payload["H"]}.{payload["M"]}')
+                    _time.sleep(0.3)
+                except Exception as e:
+                    log.warning(f'Hub invoke failed: {e}')
+        _t.Thread(target=_send_subscribes, daemon=True).start()
 
     def on_close(ws, code, msg):
         with _lock:
