@@ -100,22 +100,53 @@ _FLAG_MAP = {
 
 # ─── Token + negotiate ────────────────────────────────────────────────────────
 
+_session = requests.Session()
+_session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+
 def fetch_token():
-    """Scrape _tk auth token from the venue page HTML."""
+    """Get _tk auth token — tries page HTML, cookies, and JS bundle."""
     try:
-        r = requests.get(f'{BASE_URL}/{VENUE}', timeout=10,
-                         headers={'User-Agent': 'Mozilla/5.0'})
+        r = _session.get(f'{BASE_URL}/{VENUE}', timeout=10,
+                         headers={'Referer': BASE_URL})
+
+        # 1. Check cookies set by the server
+        for name, value in _session.cookies.items():
+            if re.match(r'^[a-f0-9]{32}$', value, re.IGNORECASE):
+                log.info(f'Token from cookie "{name}": {value[:8]}…')
+                return value
+            if '_tk' in name.lower() or 'token' in name.lower():
+                log.info(f'Token from cookie "{name}": {value[:8]}…')
+                return value
+
+        # 2. Search page HTML
         for pattern in [
             r'["\']_tk["\']\s*[,:]\s*["\']([a-f0-9]{32})["\']',
             r'\btk\b\s*[:=]\s*["\']([a-f0-9]{32})["\']',
             r'authToken\s*[:=]\s*["\']([a-f0-9]{32})["\']',
             r'token\s*[:=]\s*["\']([a-f0-9]{32})["\']',
+            r'"tk"\s*:\s*"([a-f0-9]{32})"',
+            r"'tk'\s*:\s*'([a-f0-9]{32})'",
         ]:
             m = re.search(pattern, r.text, re.IGNORECASE)
             if m:
-                log.info('Token found')
+                log.info(f'Token from HTML: {m.group(1)[:8]}…')
                 return m.group(1)
-        log.warning('Token not found in page — trying without')
+
+        # 3. Try fetching any linked JS bundles and searching those
+        js_urls = re.findall(r'src=["\']([^"\']*\.js[^"\']*)["\']', r.text)
+        for js_url in js_urls[:5]:
+            if not js_url.startswith('http'):
+                js_url = BASE_URL + '/' + js_url.lstrip('/')
+            try:
+                js_r = _session.get(js_url, timeout=8)
+                m = re.search(r'["\']([a-f0-9]{32})["\']', js_r.text)
+                if m:
+                    log.info(f'Token from JS bundle: {m.group(1)[:8]}…')
+                    return m.group(1)
+            except Exception:
+                pass
+
+        log.warning('Token not found — connecting without (data may be limited)')
         return ''
     except Exception as e:
         log.error(f'fetch_token: {e}')
@@ -356,9 +387,22 @@ def on_message(ws, raw):
     for m in messages:
         if isinstance(m, dict):
             # Hub message: {"H":"hub","M":"method","A":[args]}
+            method = m.get('M', '')
             args = m.get('A', [])
+            if method == '$_Reload':
+                log.warning('Server sent $_Reload — token may be invalid, will reconnect')
+                return
             if args:
                 dispatch(args[0] if len(args) == 1 else args)
+        elif isinstance(m, list):
+            # Array format: ["methodName", data]
+            if len(m) >= 1:
+                method = m[0] if isinstance(m[0], str) else ''
+                if method == '$_Reload':
+                    log.warning('Server sent $_Reload (list format) — auth token missing')
+                    return
+                if len(m) >= 2 and m[1] is not None:
+                    dispatch(m[1])
         elif isinstance(m, str):
             try:
                 dispatch(json.loads(m))
